@@ -39,9 +39,9 @@ class CustomPlotViewer extends Viewer {
     this.lastData = {};
 
     // TODO: fill in how many plots to show
-    this.num_plots = 2;
+    this.num_plots = 4;
     // TODO: fill in what the plots should be called
-    let plots_title = ["plot 1", "plot 2"];
+    let plots_title = ["rpms_fr", "rpms_rr", "rpms_rl", "rpms_fl"];
 
     let opts_list = [];
     for (let i = 0; i < this.num_plots; i++) {
@@ -127,7 +127,7 @@ class CustomPlotViewer extends Viewer {
       this.card.title.text(msg._topic_name);
       this.valueField.text(msg.data);
       // TODO: fill in which parts of message to show, must match this.num_plots
-      let data_to_plot = [msg.subfield1, msg.subfield1.subsubfield2];
+      let data_to_plot = [msg.rpms_fr, msg.rpms_rr, msg.rpms_rl, msg.rpms_fl];
       for (let i = 0; i < this.num_plots; i++) {
         this.data_list[i][0][this.ptr_list[i]] = Math.floor(Date.now() / 10)/ 100;
         this.data_list[i][1][this.ptr_list[i]] = data_to_plot[i];
@@ -137,11 +137,11 @@ class CustomPlotViewer extends Viewer {
 }
 
 // TODO: Customize name
-CustomPlotViewer.friendlyName = "Some custom name";
+CustomPlotViewer.friendlyName = "RPM View";
 
 // TODO: Fill here message type
 CustomPlotViewer.supportedTypes = [
-    "usr_msgs/msg/SomeMessage",
+    "usr_msgs/msg/MotorsRPM",
 ];
 
 CustomPlotViewer.maxUpdateRate = 100.0;
