@@ -194,6 +194,11 @@ def compress_image(msg, output):
             axis=-1,
         )
 
+    # # enforce <800px max dimension, and do a stride-based resize
+    # if cv2_img.shape[0] > 800 or cv2_img.shape[1] > 800:
+    #     stride = int(np.ceil(max(cv2_img.shape[0] / 800.0, cv2_img.shape[1] / 800.0)))
+    #     cv2_img = cv2_img[::stride,::stride]
+
     # if image format isn't already uint8, make it uint8 for visualization purposes
     if cv2_img.dtype != np.uint8:
         if cv2_img.dtype == np.uint64:
