@@ -2,6 +2,7 @@ import base64
 import io
 import numpy as np
 import cv2
+import os
 from rosboard.cv_bridge import imgmsg_to_cv2
 
 try:
@@ -174,9 +175,10 @@ def compress_image(msg, output):
         cv2_img = np.stack((cv2_img[:,:,0], cv2_img[:,:,1], np.zeros(cv2_img[:,:,0].shape)), axis = -1)
 
     # enforce <800px max dimension, and do a stride-based resize
-    #   if cv2_img.shape[0] > 800 or cv2_img.shape[1] > 800:
-    #       stride = int(np.ceil(max(cv2_img.shape[0] / 800.0, cv2_img.shape[1] / 800.0)))
-    #       cv2_img = cv2_img[::stride,::stride]
+    if int(os.getenv("ROSBOARD_IMAG_COMPRESSION", 0)):
+        if cv2_img.shape[0] > 800 or cv2_img.shape[1] > 800:
+        stride = int(np.ceil(max(cv2_img.shape[0] / 800.0, cv2_img.shape[1] / 800.0)))
+        cv2_img = cv2_img[::stride,::stride]
     
     # if image format isn't already uint8, make it uint8 for visualization purposes
     if cv2_img.dtype != np.uint8:
