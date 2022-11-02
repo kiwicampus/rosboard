@@ -70,6 +70,9 @@ They are a great project, I initially used it, but moved away from it in favor o
 
 * Many times in the past, the robot web tools are not available immediately on apt-get when ROS distros are released, and one has to wait months. This depends on only some standard Python libraries like `tornado` and optionally `PIL` and does not depend on any distro-specific ROS packages, so it should theoretically work immediately when new ROS distros are released.
 
+## Env Vars
+
+* `ROSBOARD_IMAG_COMPRESSION` - Set to 1/0 to enable/disable image resize. Default is 0.
 ## Credits
 
 This project makes use of a number of open-source libraries which the author is extremely grateful of.

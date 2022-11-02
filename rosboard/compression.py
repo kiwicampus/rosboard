@@ -175,6 +175,7 @@ def compress_image(msg, output):
         cv2_img = np.stack((cv2_img[:,:,0], cv2_img[:,:,1], np.zeros(cv2_img[:,:,0].shape)), axis = -1)
 
     # enforce <800px max dimension, and do a stride-based resize
+    # If you want to activate the resize, set the env variable "ROSBOARD_IMAG_COMPRESSION" to 1
     if int(os.getenv("ROSBOARD_IMAG_COMPRESSION", 0)):
         if cv2_img.shape[0] > 800 or cv2_img.shape[1] > 800:
         stride = int(np.ceil(max(cv2_img.shape[0] / 800.0, cv2_img.shape[1] / 800.0)))
