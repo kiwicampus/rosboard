@@ -72,7 +72,7 @@ They are a great project, I initially used it, but moved away from it in favor o
 
 ## Env Vars
 
-* `ROSBOARD_IMAG_COMPRESSION` - Set to 1/0 to enable/disable image resize. Default is 0.
+* `ROSBOARD_IMAG_RESIZE` - Set to 1/0 to enable/disable image resize. Default is 0.
 ## Credits
 
 This project makes use of a number of open-source libraries which the author is extremely grateful of.
