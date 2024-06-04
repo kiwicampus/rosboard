@@ -150,6 +150,8 @@ def compress_compressed_image(msg, output):
         img_jpeg = encode_jpeg(img)
     except Exception as e:
         output["_error"] = "Error: %s" % str(e)
+        img_jpeg=b''
+        original_shape=(0,0)
     output["_data_jpeg"] = base64.b64encode(img_jpeg).decode()
     output["_data_shape"] = list(original_shape)
             
@@ -278,6 +280,13 @@ def compress_point_cloud2(msg, output):
         points = points[idx]
 
     xpoints = points['x'].astype(np.float32)
+    if len(xpoints) == 0:
+        output["_data_uint16"] = {
+            "type": "xyz",
+            "bounds": list(),
+            "points":b'',
+        }
+        return
     xmax = np.max(xpoints)
     xmin = np.min(xpoints)
     if xmax - xmin < 1.0:
