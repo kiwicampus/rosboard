@@ -383,11 +383,8 @@ class ROSBoardNode(object):
         if self.event_loop is None:
             return
 
-        # Add to msg object the resize_image flag
-        msg.resize_image = self.resize_images
-
         # convert ROS message into a dict and get it ready for serialization
-        ros_msg_dict = ros2dict(msg)
+        ros_msg_dict = ros2dict(msg, resize_image=self.resize_images)
 
         # add metadata
         ros_msg_dict["_topic_name"] = topic_name
