@@ -1,16 +1,14 @@
 import json
 import socket
 import time
+import tornado
+import tornado.web
+import tornado.websocket
 import traceback
 import types
 import uuid
 
-import tornado
-import tornado.web
-import tornado.websocket
-
 from . import __version__
-
 
 class NoCacheStaticFileHandler(tornado.web.StaticFileHandler):
     def set_extra_headers(self, path):
@@ -19,10 +17,6 @@ class NoCacheStaticFileHandler(tornado.web.StaticFileHandler):
 
 class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
     sockets = set()
-
-    def check_origin(self, origin):
-        # Allow connections from any origin so we can connect from other pages
-        return True
 
     def initialize(self, node):
         # store the instance of the ROS node that created this WebSocketHandler so we can access it later
@@ -72,14 +66,14 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         latency and clock differences.
         """
 
-        for curr_socket in cls.sockets:
+        for socket in cls.sockets:
             try:
-                curr_socket.last_ping_times[curr_socket.ping_seq % 1024] = time.time() * 1000
-                if curr_socket.ws_connection and not curr_socket.ws_connection.is_closing():
-                    curr_socket.write_message(json.dumps([ROSBoardSocketHandler.MSG_PING, {
-                        ROSBoardSocketHandler.PING_SEQ: curr_socket.ping_seq,
+                socket.last_ping_times[socket.ping_seq % 1024] = time.time() * 1000
+                if socket.ws_connection and not socket.ws_connection.is_closing():
+                    socket.write_message(json.dumps([ROSBoardSocketHandler.MSG_PING, {
+                        ROSBoardSocketHandler.PING_SEQ: socket.ping_seq,
                     }], separators=(',', ':')))
-                curr_socket.ping_seq += 1
+                socket.ping_seq += 1
             except Exception as e:
                 print("Error sending message: %s" % str(e))
 
@@ -94,26 +88,26 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         try:
             if message[0] == ROSBoardSocketHandler.MSG_TOPICS:
                 json_msg = json.dumps(message, separators=(',', ':'))
-                for curr_socket in cls.sockets:
-                    if curr_socket.ws_connection and not curr_socket.ws_connection.is_closing():
-                        curr_socket.write_message(json_msg)
+                for socket in cls.sockets:
+                    if socket.ws_connection and not socket.ws_connection.is_closing():
+                        socket.write_message(json_msg)
             elif message[0] == ROSBoardSocketHandler.MSG_MSG:
                 topic_name = message[1]["_topic_name"]
                 json_msg = None
-                for curr_socket in cls.sockets:
-                    if topic_name not in curr_socket.node.remote_subs:
+                for socket in cls.sockets:
+                    if topic_name not in socket.node.remote_subs:
                         continue
-                    if curr_socket.id not in curr_socket.node.remote_subs[topic_name]:
+                    if socket.id not in socket.node.remote_subs[topic_name]:
                         continue
                     t = time.time()
-                    if t - curr_socket.last_data_times_by_topic.get(topic_name, 0.0) < \
-                            curr_socket.update_intervals_by_topic.get(topic_name) - 2e-4:
+                    if t - socket.last_data_times_by_topic.get(topic_name, 0.0) < \
+                            socket.update_intervals_by_topic.get(topic_name) - 2e-4:
                         continue
-                    if curr_socket.ws_connection and not curr_socket.ws_connection.is_closing():
+                    if socket.ws_connection and not socket.ws_connection.is_closing():
                         if json_msg is None:
                             json_msg = json.dumps(message, separators=(',', ':'))
-                        curr_socket.write_message(json_msg)
-                    curr_socket.last_data_times_by_topic[topic_name] = t
+                        socket.write_message(json_msg)
+                    socket.last_data_times_by_topic[topic_name] = t
         except Exception as e:
             print("Error sending message: %s" % str(e))
             traceback.print_exc()
@@ -216,15 +210,15 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
             self.node.publish_remote_message(argv)
 
 
-ROSBoardSocketHandler.MSG_PING = "p"
-ROSBoardSocketHandler.MSG_PONG = "q"
-ROSBoardSocketHandler.MSG_MSG = "m"
-ROSBoardSocketHandler.MSG_TOPICS = "t"
-ROSBoardSocketHandler.MSG_SUB = "s"
-ROSBoardSocketHandler.MSG_SYSTEM = "y"
-ROSBoardSocketHandler.MSG_UNSUB = "u"
-ROSBoardSocketHandler.MSG_UNPUB = "n"
+ROSBoardSocketHandler.MSG_PING = "p";
+ROSBoardSocketHandler.MSG_PONG = "q";
+ROSBoardSocketHandler.MSG_MSG = "m";
+ROSBoardSocketHandler.MSG_TOPICS = "t";
+ROSBoardSocketHandler.MSG_SUB = "s";
+ROSBoardSocketHandler.MSG_SYSTEM = "y";
+ROSBoardSocketHandler.MSG_UNSUB = "u";
+ROSBoardSocketHandler.MSG_UNPUB = "n";
 
-ROSBoardSocketHandler.PING_SEQ = "s"
-ROSBoardSocketHandler.PONG_SEQ = "s"
-ROSBoardSocketHandler.PONG_TIME = "t"
+ROSBoardSocketHandler.PING_SEQ = "s";
+ROSBoardSocketHandler.PONG_SEQ = "s";
+ROSBoardSocketHandler.PONG_TIME = "t";
