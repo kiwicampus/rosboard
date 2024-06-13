@@ -1,8 +1,9 @@
 import base64
 import io
-import numpy as np
+
 import cv2
-import os
+import numpy as np
+
 from rosboard.cv_bridge import imgmsg_to_cv2
 
 try:
@@ -144,10 +145,14 @@ def compress_compressed_image(msg, output):
     try:
         img = decode_jpeg(bytearray(msg.data))
         original_shape = img.shape
-        if img.shape[0] > 800 or img.shape[1] > 800:
+        resize_image = hasattr(msg, "resize_image") and msg.resize_image
+        if (img.shape[0] > 800 or img.shape[1] > 800) and resize_image:
             stride = int(np.ceil(max(img.shape[0] / 800.0, img.shape[1] / 800.0)))
             img = img[::stride,::stride]
-        img_jpeg = encode_jpeg(img)
+            img_jpeg = encode_jpeg(img)
+        else:
+            img_jpeg = bytearray(msg.data)
+        
     except Exception as e:
         output["_error"] = "Error: %s" % str(e)
         img_jpeg=b''
@@ -176,12 +181,11 @@ def compress_image(msg, output):
     if len(cv2_img.shape) == 3 and cv2_img.shape[2] == 2:
         cv2_img = np.stack((cv2_img[:,:,0], cv2_img[:,:,1], np.zeros(cv2_img[:,:,0].shape)), axis = -1)
 
+    resize_image = hasattr(msg, "resize_image") and msg.resize_image
     # enforce <800px max dimension, and do a stride-based resize
-    # If you want to activate the resize, set the env variable "ROSBOARD_IMAG_RESIZE" to 1
-    if int(os.getenv("ROSBOARD_IMAG_RESIZE", 0)):
-        if cv2_img.shape[0] > 800 or cv2_img.shape[1] > 800:
-            stride = int(np.ceil(max(cv2_img.shape[0] / 800.0, cv2_img.shape[1] / 800.0)))
-            cv2_img = cv2_img[::stride,::stride]
+    if (cv2_img.shape[0] > 800 or cv2_img.shape[1] > 800) and resize_image:
+        stride = int(np.ceil(max(cv2_img.shape[0] / 800.0, cv2_img.shape[1] / 800.0)))
+        cv2_img = cv2_img[::stride,::stride]
     
     # if image format isn't already uint8, make it uint8 for visualization purposes
     if cv2_img.dtype != np.uint8:
