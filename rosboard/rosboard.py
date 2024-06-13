@@ -11,15 +11,7 @@ import tornado
 import tornado.web
 import tornado.websocket
 
-if os.environ.get("ROS_VERSION") == "1":
-    import rospy  # ROS1
-elif os.environ.get("ROS_VERSION") == "2":
-    from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
-
-    import rosboard.rospy2 as rospy  # ROS2
-else:
-    print("ROS not detected. Please source your ROS environment\n(e.g. 'source /opt/ros/DISTRO/setup.bash')")
-    exit(1)
+from rosboard.ros_init import rospy
 
 from rclpy_message_converter.message_converter import convert_dictionary_to_ros_message
 from rosgraph_msgs.msg import Log
@@ -30,7 +22,7 @@ from rosboard.subscribers.dmesg_subscriber import DMesgSubscriber
 from rosboard.subscribers.dummy_subscriber import DummySubscriber
 from rosboard.subscribers.processes_subscriber import ProcessesSubscriber
 from rosboard.subscribers.system_stats_subscriber import SystemStatsSubscriber
-
+from rosboard.topics import get_all_topics
 
 class ROSBoardNode(object):
     instance = None
@@ -134,7 +126,7 @@ class ROSBoardNode(object):
             rospy.logerr(str(e))
             return None
 
-    def get_topic_qos(self, topic_name: str) -> QoSProfile:
+    def get_topic_qos(self, topic_name: str) -> "QoSProfile":
         """! 
         Given a topic name, get the QoS profile with which it is being published
         @param topic_name (str) the topic name
@@ -147,6 +139,7 @@ class ROSBoardNode(object):
                 return topic_info[0].qos_profile
             else:
                 rospy.logwarn(f"No publishers available for topic {topic_name}. Returning sensor data QoS")
+                from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
                 return QoSProfile(
                         depth=10,
                         reliability=QoSReliabilityPolicy.BEST_EFFORT,
@@ -213,14 +206,8 @@ class ROSBoardNode(object):
 
         try:
             # all topics and their types as strings e.g. {"/foo": "std_msgs/String", "/bar": "std_msgs/Int32"}
-            self.all_topics = {}
+            self.all_topics = get_all_topics()
 
-            for topic_tuple in rospy.get_published_topics():
-                topic_name = topic_tuple[0]
-                topic_type = topic_tuple[1]
-                if type(topic_type) is list:
-                    topic_type = topic_type[0] # ROS2
-                self.all_topics[topic_name] = topic_type
 
             self.event_loop.add_callback(
                 ROSBoardSocketHandler.broadcast,
@@ -286,7 +273,6 @@ class ROSBoardNode(object):
                     kwargs = {}
                     if rospy.__name__ == "rospy2":
                         # In ros2 we also can pass QoS parameters to the subscriber.
-                        # Hardcoding for now to BestEffort and Volatile.
                         kwargs = {"qos": self.get_topic_qos(topic_name)}
                     self.local_subs[topic_name] = rospy.Subscriber(
                         topic_name,

@@ -11,6 +11,7 @@ import tornado.websocket
 
 from . import __version__
 
+from rosboard.topics import get_all_topics_with_typedef, get_all_topics
 
 class NoCacheStaticFileHandler(tornado.web.StaticFileHandler):
     def set_extra_headers(self, path):
@@ -92,7 +93,7 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         """
 
         try:
-            if message[0] == ROSBoardSocketHandler.MSG_TOPICS:
+            if message[0] in [ROSBoardSocketHandler.MSG_TOPICS, ROSBoardSocketHandler.MSG_TOPICS_FULL]:
                 json_msg = json.dumps(message, separators=(',', ':'))
                 for curr_socket in cls.sockets:
                     if curr_socket.ws_connection and not curr_socket.ws_connection.is_closing():
@@ -215,11 +216,23 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
             self.node.create_publisher_if_not_exists(argv[1]["_topic_name"], argv[1]["_topic_type"])
             self.node.publish_remote_message(argv)
 
+        # client asked for a list of topics
+        elif argv[0] == ROSBoardSocketHandler.MSG_TOPICS:
+            topics = get_all_topics()
+            self.broadcast([ROSBoardSocketHandler.MSG_TOPICS, topics])
+
+        # client asked for a list of topics and full descriptions
+        elif argv[0] == ROSBoardSocketHandler.MSG_TOPICS_FULL:
+            topics = get_all_topics_with_typedef()
+            self.broadcast([ROSBoardSocketHandler.MSG_TOPICS_FULL, topics])
+
+
 
 ROSBoardSocketHandler.MSG_PING = "p"
 ROSBoardSocketHandler.MSG_PONG = "q"
 ROSBoardSocketHandler.MSG_MSG = "m"
 ROSBoardSocketHandler.MSG_TOPICS = "t"
+ROSBoardSocketHandler.MSG_TOPICS_FULL = "f"
 ROSBoardSocketHandler.MSG_SUB = "s"
 ROSBoardSocketHandler.MSG_SYSTEM = "y"
 ROSBoardSocketHandler.MSG_UNSUB = "u"
