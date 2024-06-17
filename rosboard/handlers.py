@@ -124,7 +124,7 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         Message received from the client.
         """
 
-        if self.ws_connection.is_closing():
+        if self.ws_connection is None or self.ws_connection.is_closing():
             return
 
         # JSON decode it, give up if it isn't valid JSON
