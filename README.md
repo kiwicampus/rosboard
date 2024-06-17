@@ -74,8 +74,8 @@ They are a great project, I initially used it, but moved away from it in favor o
 
 * `port` - The port to run the web server on. Default is 8888.
 * `resize_images` - Resize images if they are larger than 800 pixels in either dimension. Default is true.
-
-
+* `max_allowed_latency` - Maximum allowed latency in milliseconds before dropping the connection. Default is 10000.
+* `foxglove_uri` - URI of the Foxglove Studio instance to redirect to when the "Foxglove" button is clicked. Default is official Foxglove Studio instance https://app.foxglove.dev/ **which doesn't work with the rosboard protocol**. You can run your own Foxglove Studio instance and set this parameter accordingly.
 ## Credits
 
 This project makes use of a number of open-source libraries which the author is extremely grateful of.
