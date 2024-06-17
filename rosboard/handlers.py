@@ -25,9 +25,10 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         # Allow connections from any origin so we can connect from other pages
         return True
 
-    def initialize(self, node):
+    def initialize(self, node, max_allowed_latency):
         # store the instance of the ROS node that created this WebSocketHandler so we can access it later
         self.node = node
+        self.max_allowed_latency = max_allowed_latency
 
     def get_compression_options(self):
         # Non-None enables compression with default options.
@@ -150,8 +151,9 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
             if self.latency > 1000.0:
                 self.node.logwarn("socket %s has high latency of %.2f ms" % (str(self.id), self.latency))
             
-            if self.latency > 10000.0:
+            if self.latency > self.max_allowed_latency:
                 self.node.logerr("socket %s has excessive latency of %.2f ms; closing connection" % (str(self.id), self.latency))
+                self.node.logerr("max allowed latency is %.2f ms" % self.max_allowed_latency)
                 self.close()
 
         # client wants to subscribe to topic

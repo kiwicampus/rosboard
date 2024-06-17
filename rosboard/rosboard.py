@@ -31,6 +31,7 @@ class ROSBoardNode(object):
         rospy.init_node(node_name)
         self.port = rospy.get_param("~port", 8888)
         self.resize_images = rospy.get_param("~resize_images", True)
+        self.max_allowed_latency = rospy.get_param("~max_allowed_latency", 10000)
 
         # desired subscriptions of all the websockets connecting to this instance.
         # these remote subs are updated directly by "friend" class ROSBoardSocketHandler.
@@ -69,6 +70,7 @@ class ROSBoardNode(object):
         tornado_handlers = [
                 (r"/rosboard/v1", ROSBoardSocketHandler, {
                     "node": self,
+                    "max_allowed_latency": self.max_allowed_latency
                 }),
                 (r"/(.*)", NoCacheStaticFileHandler, {
                     "path": tornado_settings.get("static_path"),
