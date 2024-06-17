@@ -16,7 +16,7 @@ from rosboard.ros_init import rospy
 from rclpy_message_converter.message_converter import convert_dictionary_to_ros_message
 from rosgraph_msgs.msg import Log
 
-from rosboard.handlers import NoCacheStaticFileHandler, ROSBoardSocketHandler
+from rosboard.handlers import MainPageHandler, ROSBoardSocketHandler
 from rosboard.serialization import ros2dict
 from rosboard.subscribers.dmesg_subscriber import DMesgSubscriber
 from rosboard.subscribers.dummy_subscriber import DummySubscriber
@@ -32,6 +32,7 @@ class ROSBoardNode(object):
         self.port = rospy.get_param("~port", 8888)
         self.resize_images = rospy.get_param("~resize_images", True)
         self.max_allowed_latency = rospy.get_param("~max_allowed_latency", 10000)
+        self.foxglove_uri = rospy.get_param("~foxglove_uri", "https://app.foxglove.dev/")
 
         # desired subscriptions of all the websockets connecting to this instance.
         # these remote subs are updated directly by "friend" class ROSBoardSocketHandler.
@@ -62,9 +63,11 @@ class ROSBoardNode(object):
             # ros2 docs don't explain why but we need this magic.
             self.sub_rosout = rospy.Subscriber("/rosout", Log, lambda x:x)
 
+        static_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'html')
         tornado_settings = {
             'debug': True, 
-            'static_path': os.path.join(os.path.dirname(os.path.realpath(__file__)), 'html')
+            'static_path':static_path,
+            'template_path':static_path
         }
 
         tornado_handlers = [
@@ -72,10 +75,13 @@ class ROSBoardNode(object):
                     "node": self,
                     "max_allowed_latency": self.max_allowed_latency
                 }),
-                (r"/(.*)", NoCacheStaticFileHandler, {
-                    "path": tornado_settings.get("static_path"),
-                    "default_filename": "index.html"
+                (r"/", MainPageHandler, {
+                    "default_filename": "index.html",
+                    "foxglove_uri": self.foxglove_uri,
                 }),
+                (r"/js/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(static_path, 'js')}),
+                (r"/css/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(static_path, 'css')}),
+                (r"/fonts/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(static_path, 'fonts')}),
         ]
 
         self.event_loop = None

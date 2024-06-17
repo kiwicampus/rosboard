@@ -13,10 +13,21 @@ from . import __version__
 
 from rosboard.topics import get_all_topics_with_typedef, get_all_topics
 
-class NoCacheStaticFileHandler(tornado.web.StaticFileHandler):
+
+
+class MainPageHandler(tornado.web.RequestHandler):
+
+    def get(self, path=None):
+        self.render(self.default_filename, foxglove_uri=self.foxglove_uri)
+
     def set_extra_headers(self, path):
         # Disable cache
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+
+    def initialize(self, default_filename, foxglove_uri):
+        self.default_filename = default_filename
+        self.foxglove_uri = foxglove_uri
+
 
 class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
     sockets = set()
