@@ -18,15 +18,16 @@ from rosboard.topics import get_all_topics_with_typedef, get_all_topics
 class MainPageHandler(tornado.web.RequestHandler):
 
     def get(self, path=None):
-        self.render(self.default_filename, foxglove_uri=self.foxglove_uri)
+        self.render(self.default_filename, foxglove_uri=self.foxglove_uri, foxglove_layout_uri=self.foxglove_layout_uri)
 
     def set_extra_headers(self, path):
         # Disable cache
         self.set_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
 
-    def initialize(self, default_filename, foxglove_uri):
+    def initialize(self, default_filename, foxglove_uri, foxglove_layout_uri):
         self.default_filename = default_filename
         self.foxglove_uri = foxglove_uri
+        self.foxglove_layout_uri = foxglove_layout_uri
 
 
 class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):

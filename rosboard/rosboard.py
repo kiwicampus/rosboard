@@ -33,7 +33,7 @@ class ROSBoardNode(object):
         self.resize_images = rospy.get_param("~resize_images", True)
         self.max_allowed_latency = rospy.get_param("~max_allowed_latency", 10000)
         self.foxglove_uri = rospy.get_param("~foxglove_uri", "https://app.foxglove.dev/")
-
+        self.foxglove_layout_uri = rospy.get_param("~foxglove_layout_uri", "")
         # desired subscriptions of all the websockets connecting to this instance.
         # these remote subs are updated directly by "friend" class ROSBoardSocketHandler.
         # this class will read them and create actual ROS subscribers accordingly.
@@ -78,6 +78,7 @@ class ROSBoardNode(object):
                 (r"/", MainPageHandler, {
                     "default_filename": "index.html",
                     "foxglove_uri": self.foxglove_uri,
+                    "foxglove_layout_uri": self.foxglove_layout_uri
                 }),
                 (r"/js/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(static_path, 'js')}),
                 (r"/css/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(static_path, 'css')}),
