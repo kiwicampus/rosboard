@@ -9,10 +9,9 @@ import tornado
 import tornado.web
 import tornado.websocket
 
+from rosboard.topics import get_all_topics, get_all_topics_with_typedef
+
 from . import __version__
-
-from rosboard.topics import get_all_topics_with_typedef, get_all_topics
-
 
 
 class MainPageHandler(tornado.web.RequestHandler):
@@ -176,6 +175,11 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
 
             topic_name = argv[1].get("topicName")
             max_update_rate = float(argv[1].get("maxUpdateRate", 24.0))
+
+            # topic_type = get_all_topics().get(topic_name)
+            # if topic_type is not None and topic_type == 'sensor_msgs/msg/PointCloud2':
+            #     max_update_rate = 5.0
+            #     print("PointCloud2 topic detected, setting max update rate to 5.0")
 
             self.update_intervals_by_topic[topic_name] = 1.0 / max_update_rate
             self.node.update_intervals_by_topic[topic_name] = min(
