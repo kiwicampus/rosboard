@@ -12,7 +12,6 @@ import tornado.web
 import tornado.websocket
 
 from rosboard.ros_init import rospy
-
 from rclpy_message_converter.message_converter import convert_dictionary_to_ros_message
 from rosgraph_msgs.msg import Log
 
@@ -22,7 +21,14 @@ from rosboard.subscribers.dmesg_subscriber import DMesgSubscriber
 from rosboard.subscribers.dummy_subscriber import DummySubscriber
 from rosboard.subscribers.processes_subscriber import ProcessesSubscriber
 from rosboard.subscribers.system_stats_subscriber import SystemStatsSubscriber
-from rosboard.topics import get_all_topics
+
+# This brakes ROS1 support
+from rosboard.topics import (
+    get_all_topics,
+    get_all_topics_with_typedef,
+    update_all_topics_with_typedef,
+)
+
 
 class ROSBoardNode(object):
     instance = None
@@ -70,10 +76,15 @@ class ROSBoardNode(object):
             'template_path':static_path
         }
 
+        # Start by passing the topics and their typedefs for caching
+        # TODO: add ros1 support for this
+        self.shared_full_topics = get_all_topics_with_typedef()
+
         tornado_handlers = [
                 (r"/rosboard/v1", ROSBoardSocketHandler, {
                     "node": self,
-                    "max_allowed_latency": self.max_allowed_latency
+                    "max_allowed_latency": self.max_allowed_latency,
+                    "full_topics": self.shared_full_topics
                 }),
                 (r"/", MainPageHandler, {
                     "default_filename": "index.html",
@@ -148,7 +159,11 @@ class ROSBoardNode(object):
                 return topic_info[0].qos_profile
             else:
                 rospy.logwarn(f"No publishers available for topic {topic_name}. Returning sensor data QoS")
-                from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
+                from rclpy.qos import (
+                    QoSDurabilityPolicy,
+                    QoSProfile,
+                    QoSReliabilityPolicy,
+                )
                 return QoSProfile(
                         depth=10,
                         reliability=QoSReliabilityPolicy.BEST_EFFORT,
@@ -217,6 +232,8 @@ class ROSBoardNode(object):
             # all topics and their types as strings e.g. {"/foo": "std_msgs/String", "/bar": "std_msgs/Int32"}
             self.all_topics = get_all_topics()
 
+            # Update the shared full topics object with all the topics and their typedefs
+            update_all_topics_with_typedef(self.shared_full_topics,topics=self.all_topics)
 
             self.event_loop.add_callback(
                 ROSBoardSocketHandler.broadcast,

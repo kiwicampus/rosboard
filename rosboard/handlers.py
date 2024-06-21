@@ -9,7 +9,8 @@ import tornado
 import tornado.web
 import tornado.websocket
 
-from rosboard.topics import get_all_topics, get_all_topics_with_typedef
+# This brakes ROS1 support
+from rosboard.topics import get_all_topics, update_all_topics_with_typedef
 
 from . import __version__
 
@@ -36,10 +37,14 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         # Allow connections from any origin so we can connect from other pages
         return True
 
-    def initialize(self, node, max_allowed_latency):
+    def initialize(self, node, max_allowed_latency, full_topics):
         # store the instance of the ROS node that created this WebSocketHandler so we can access it later
         self.node = node
         self.max_allowed_latency = max_allowed_latency
+
+        # Cache the topics and their typedefs since this can be slow
+        # This is a dict by reference, so it will be updated by the rosboard node
+        self.full_topics = full_topics
 
     def get_compression_options(self):
         # Non-None enables compression with default options.
@@ -241,8 +246,10 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
 
         # client asked for a list of topics and full descriptions
         elif argv[0] == ROSBoardSocketHandler.MSG_TOPICS_FULL:
-            topics = get_all_topics_with_typedef()
-            self.broadcast([ROSBoardSocketHandler.MSG_TOPICS_FULL, topics])
+            # Copy to avoid thread safety issues, since main thread can update the topics
+            full_topics = self.full_topics.copy()
+            update_all_topics_with_typedef(full_topics)
+            self.broadcast([ROSBoardSocketHandler.MSG_TOPICS_FULL, full_topics])
 
 
 

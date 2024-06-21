@@ -1,8 +1,10 @@
 import os
+
 from rosidl_adapter.parser import parse_message_string
 from rosidl_runtime_py import get_interface_path
 
 from rosboard.ros_init import rospy
+
 
 def get_all_topics():
     all_topics = {}
@@ -14,6 +16,19 @@ def get_all_topics():
         all_topics[topic_name] = topic_type
     return all_topics
 
+def update_all_topics_with_typedef(full_topics, topics=None):
+    if topics is None:
+        topics = get_all_topics()
+    topic_names = set(topics.keys())
+    cached_topic_names = set(full_topics.keys())
+    # Get only the topics that are not cached
+    missing_topics = topic_names - cached_topic_names
+    if missing_topics:
+        for topic_name in missing_topics:
+            topic_type = topics[topic_name]
+            type_def = get_typedef_full_text(topic_type)
+            full_topics[topic_name] = {"type": topic_type, "typedef": type_def}
+
 def get_all_topics_with_typedef():
     topics = get_all_topics()
     full_topics = {}
@@ -22,6 +37,7 @@ def get_all_topics_with_typedef():
         full_topics[topic_name] = {"type": topic_type, "typedef": full_typedef}
     return full_topics
 
+# TODO: Add ros1 support for this function
 def get_typedef_full_text(ty):
     """Returns the full text (similar to `gendeps --cat`) for the specified message type"""
     try:
