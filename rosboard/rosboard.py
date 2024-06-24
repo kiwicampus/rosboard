@@ -172,6 +172,11 @@ class ROSBoardNode(object):
                 return qos
             else:
                 rospy.logwarn(f"No publishers available for topic {topic_name}. Returning sensor data QoS")
+                from rclpy.qos import (
+                    QoSDurabilityPolicy,
+                    QoSProfile,
+                    QoSReliabilityPolicy,
+                )
                 return QoSProfile(
                         depth=10,
                         reliability=QoSReliabilityPolicy.BEST_EFFORT,
