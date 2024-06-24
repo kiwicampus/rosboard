@@ -154,16 +154,24 @@ class ROSBoardNode(object):
         for the given topic, it returns the sensor data QoS. returns None in case ROS1 is being used
         """
         if rospy.__name__ == "rospy2":
+            from rclpy.qos import (
+                QoSDurabilityPolicy,
+                QoSProfile,
+                QoSReliabilityPolicy, HistoryPolicy
+            )
             topic_info = rospy._node.get_publishers_info_by_topic(topic_name=topic_name)
             if len(topic_info):
-                return topic_info[0].qos_profile
+                qos = topic_info[0].qos_profile
+                if qos.depth == 1 and qos.durability == QoSDurabilityPolicy.TRANSIENT_LOCAL:
+                    rospy.logwarn(f"Topic {topic_name} has transient_local QoS but depth=1, some messages might be lost "
+                                  "with this depth. Setting the depth to 10 to be sure to fetch all past messages"
+                    )
+                    qos.depth = 100
+                    qos.history =   HistoryPolicy.KEEP_ALL
+                    print(qos)
+                return qos
             else:
                 rospy.logwarn(f"No publishers available for topic {topic_name}. Returning sensor data QoS")
-                from rclpy.qos import (
-                    QoSDurabilityPolicy,
-                    QoSProfile,
-                    QoSReliabilityPolicy,
-                )
                 return QoSProfile(
                         depth=10,
                         reliability=QoSReliabilityPolicy.BEST_EFFORT,
@@ -307,6 +315,8 @@ class ROSBoardNode(object):
                         callback_args = (topic_name, topic_type),
                         **kwargs
                     )
+                    # if topic_name == "/tf_static":
+                    #     time.sleep(2)
 
             # clean up local subscribers for which remote clients have lost interest
             for topic_name in list(self.local_subs.keys()):
@@ -397,6 +407,15 @@ class ROSBoardNode(object):
 
         # convert ROS message into a dict and get it ready for serialization
         ros_msg_dict = ros2dict(msg, resize_image=self.resize_images)
+
+        if topic_name == "/tf_static":
+            print("Mensaje", flush=True)
+            num_transforms = len(msg.transforms)
+            print(num_transforms)
+            for transform in msg.transforms:
+                root_id = transform.header.frame_id
+                child_id = transform.child_frame_id
+                print(root_id, child_id)
 
         # add metadata
         ros_msg_dict["_topic_name"] = topic_name
