@@ -130,12 +130,27 @@ class ROSBoardNode(object):
             self.get_msg_class(topic_type),
             self.on_tf_static,
             callback_args = (topic_name, topic_type),
-            qos = self.get_topic_qos(topic_name)
+            qos = self.get_transient_local_qos()
         )
         self.static_transforms = []
 
     def on_tf_static(self, msg, topic_info):
-        self.static_transforms.extend(msg.transforms)     
+        self.static_transforms.extend(msg.transforms)
+
+    def get_transient_local_qos(self):
+        if rospy.__name__ == "rospy2":
+            from rclpy.qos import (
+                QoSDurabilityPolicy,
+                QoSProfile,
+                QoSReliabilityPolicy 
+            )
+            return QoSProfile(
+                    depth=10,
+                    reliability=QoSReliabilityPolicy.RELIABLE,
+                    durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+                )
+        else:
+            return 10     
 
     def start(self):
         rospy.spin()
