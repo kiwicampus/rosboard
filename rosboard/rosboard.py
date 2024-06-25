@@ -335,8 +335,6 @@ class ROSBoardNode(object):
                         callback_args = (topic_name, topic_type),
                         **kwargs
                     )
-                    # if topic_name == "/tf_static":
-                    #     time.sleep(2)
 
             # clean up local subscribers for which remote clients have lost interest
             for topic_name in list(self.local_subs.keys()):
