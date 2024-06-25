@@ -119,6 +119,24 @@ class ROSBoardNode(object):
 
         rospy.loginfo("ROSboard listening on :%d" % self.port)
 
+        # Start listening to tf_static since there's a weird bug
+        # that when a client connects and requests to subscribe to
+        # tf_static sometimes no all transforms arrive correctly :(
+        # TODO: check ROS1 support for this
+        topic_name = "/tf_static"
+        topic_type = "tf2_msgs/msg/TFMessage"
+        self.tf_static_sub = rospy.Subscriber(
+            topic_name,
+            self.get_msg_class(topic_type),
+            self.on_tf_static,
+            callback_args = (topic_name, topic_type),
+            qos = self.get_topic_qos(topic_name)
+        )
+        self.static_transforms = []
+
+    def on_tf_static(self, msg, topic_info):
+        self.static_transforms.extend(msg.transforms)     
+
     def start(self):
         rospy.spin()
 
@@ -157,7 +175,8 @@ class ROSBoardNode(object):
             from rclpy.qos import (
                 QoSDurabilityPolicy,
                 QoSProfile,
-                QoSReliabilityPolicy, HistoryPolicy
+                QoSReliabilityPolicy, 
+                HistoryPolicy
             )
             topic_info = rospy._node.get_publishers_info_by_topic(topic_name=topic_name)
             if len(topic_info):
@@ -166,17 +185,13 @@ class ROSBoardNode(object):
                     rospy.logwarn(f"Topic {topic_name} has transient_local QoS but depth=1, some messages might be lost "
                                   "with this depth. Setting the depth to 10 to be sure to fetch all past messages"
                     )
-                    qos.depth = 100
-                    qos.history =   HistoryPolicy.KEEP_ALL
-                    print(qos)
+                    # Despite of this, when a client connects a requests this for tf_static 
+                    # sometimes some transforms are missing
+                    # qos.history =   HistoryPolicy.KEEP_ALL
+                    qos.depth = 10
                 return qos
             else:
                 rospy.logwarn(f"No publishers available for topic {topic_name}. Returning sensor data QoS")
-                from rclpy.qos import (
-                    QoSDurabilityPolicy,
-                    QoSProfile,
-                    QoSReliabilityPolicy,
-                )
                 return QoSProfile(
                         depth=10,
                         reliability=QoSReliabilityPolicy.BEST_EFFORT,
@@ -410,17 +425,12 @@ class ROSBoardNode(object):
         if self.event_loop is None:
             return
 
+        if topic_name == "/tf_static":
+            if self.static_transforms:
+                msg.transforms = msg.transforms + self.static_transforms
+
         # convert ROS message into a dict and get it ready for serialization
         ros_msg_dict = ros2dict(msg, resize_image=self.resize_images)
-
-        if topic_name == "/tf_static":
-            print("Mensaje", flush=True)
-            num_transforms = len(msg.transforms)
-            print(num_transforms)
-            for transform in msg.transforms:
-                root_id = transform.header.frame_id
-                child_id = transform.child_frame_id
-                print(root_id, child_id)
 
         # add metadata
         ros_msg_dict["_topic_name"] = topic_name

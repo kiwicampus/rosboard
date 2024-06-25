@@ -128,9 +128,6 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
                             curr_socket.update_intervals_by_topic.get(topic_name) - 2e-4:
                         continue
                     if curr_socket.ws_connection and not curr_socket.ws_connection.is_closing():
-                        if topic_name=="/tf_static":
-                            print("sending to tf static")
-                            # print(message[1])
                         if json_msg is None:
                             json_msg = json.dumps(message, separators=(',', ':'))
                         curr_socket.write_message(json_msg)
@@ -183,12 +180,6 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
 
             topic_name = argv[1].get("topicName")
             max_update_rate = float(argv[1].get("maxUpdateRate", 24.0))
-            max_update_rate = 200
-
-            # topic_type = get_all_topics().get(topic_name)
-            # if topic_type is not None and topic_type == 'sensor_msgs/msg/PointCloud2':
-            #     max_update_rate = 5.0
-            #     print("PointCloud2 topic detected, setting max update rate to 5.0")
 
             # topic_type = get_all_topics().get(topic_name)
             # if topic_type is not None and topic_type == 'sensor_msgs/msg/PointCloud2':
