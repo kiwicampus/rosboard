@@ -11,6 +11,7 @@ import tornado.websocket
 
 # This brakes ROS1 support
 from rosboard.topics import get_all_topics, update_all_topics_with_typedef
+from rosboard.ros_init import rospy
 
 from . import __version__
 
@@ -181,10 +182,26 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
             topic_name = argv[1].get("topicName")
             max_update_rate = float(argv[1].get("maxUpdateRate", 24.0))
 
-            # topic_type = get_all_topics().get(topic_name)
-            # if topic_type is not None and topic_type == 'sensor_msgs/msg/PointCloud2':
-            #     max_update_rate = 5.0
-            #     print("PointCloud2 topic detected, setting max update rate to 5.0")
+            # Check if the rosboard node was launched with a this topic type as 
+            # as a parameter which indicates its max rate to be streamed
+            topic_type = get_all_topics().get(topic_name)
+            topic_type_max_rate = rospy.get_param(topic_type)
+            set_topic_type_max_rate = topic_type is not None and topic_type_max_rate is not None
+            if set_topic_type_max_rate:
+                max_update_rate = topic_type_max_rate
+                print(f"info: param for topic type {topic_type} set, " 
+                    f"setting {topic_name} to max rate of {topic_type_max_rate}")
+             
+            # Check if the rosboard node was lunched with this topic name as
+            # a parameter which indicates its max rate to be streamed
+            param_name = f"topic.{topic_name}" # must be like this because otherwise it thinks it is a param of another node
+            topic_name_max_rate = rospy.get_param(param_name)
+            if topic_name_max_rate is not None:
+                max_update_rate = topic_name_max_rate
+                if set_topic_type_max_rate:
+                    print("info: overriding topic type max rate because specific topic name has prevalence")
+                print(f"info: param for topic name {topic_name} set, " 
+                    f"setting {topic_name} to max rate of {topic_name_max_rate}") 
 
             self.update_intervals_by_topic[topic_name] = 1.0 / max_update_rate
             self.node.update_intervals_by_topic[topic_name] = min(
