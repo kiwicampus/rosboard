@@ -348,7 +348,7 @@ class ROSBoardNode(object):
                         self.get_msg_class(topic_type),
                         self.on_ros_msg,
                         callback_args = (topic_name, topic_type),
-                        **kwargs
+                        # **kwargs
                     )
 
             # clean up local subscribers for which remote clients have lost interest
