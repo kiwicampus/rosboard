@@ -1,4 +1,3 @@
-import os
 import array
 import base64
 
