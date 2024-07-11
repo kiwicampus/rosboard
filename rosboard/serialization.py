@@ -7,7 +7,7 @@ import numpy as np
 import rosboard.compression
 
 
-def ros2dict(msg, resize_image:bool=bool(int(os.getenv("ROSBOARD_IMAG_RESIZE",True)))):
+def ros2dict(msg, resize_image:bool=True):
     """
     Converts an arbitrary ROS1/ROS2 message into a JSON-serializable dict.
     """

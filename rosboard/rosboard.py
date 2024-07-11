@@ -36,7 +36,7 @@ class ROSBoardNode(object):
         self.__class__.instance = self
         rospy.init_node(node_name)
         self.port = rospy.get_param("~port", 8888)
-        self.resize_images = rospy.get_param("~resize_images", True)
+        self.resize_images = rospy.get_param("~resize_images", bool(int(os.getenv("ROSBOARD_IMAG_RESIZE",True))))
         self.max_allowed_latency = rospy.get_param("~max_allowed_latency", 10000)
         self.foxglove_uri = rospy.get_param("~foxglove_uri", "https://app.foxglove.dev/")
         self.foxglove_layout_uri = rospy.get_param("~foxglove_layout_uri", "")
