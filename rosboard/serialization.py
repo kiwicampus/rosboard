@@ -7,9 +7,7 @@ import numpy as np
 import rosboard.compression
 
 
-def ros2dict(
-    msg, resize_image: bool = bool(int(os.getenv("ROSBOARD_IMAG_RESIZE", True)))
-):
+def ros2dict(msg, resize_image:bool=bool(int(os.getenv("ROSBOARD_IMAG_RESIZE",True)))):
     """
     Converts an arbitrary ROS1/ROS2 message into a JSON-serializable dict.
     """
@@ -24,73 +22,59 @@ def ros2dict(
 
     output = {}
 
-    if hasattr(msg, "get_fields_and_field_types"):  # ROS2
+    if hasattr(msg, "get_fields_and_field_types"): # ROS2
         fields_and_field_types = msg.get_fields_and_field_types()
-    elif hasattr(msg, "__slots__"):  # ROS1
+    elif hasattr(msg, "__slots__"): # ROS1
         fields_and_field_types = msg.__slots__
     else:
-        raise ValueError(
-            "ros2dict: Does not appear to be a simple type or a ROS message: %s"
-            % str(msg)
-        )
+        raise ValueError("ros2dict: Does not appear to be a simple type or a ROS message: %s" % str(msg))
 
     for field in fields_and_field_types:
 
         # CompressedImage: compress to jpeg
-        if (
-            msg.__module__ == "sensor_msgs.msg._CompressedImage"
-            or msg.__module__ == "sensor_msgs.msg._compressed_image"
-        ) and field == "data":
-            rosboard.compression.compress_compressed_image(
-                msg, output, resize_image=resize_image
-            )
+        if (msg.__module__ == "sensor_msgs.msg._CompressedImage" or \
+            msg.__module__ == "sensor_msgs.msg._compressed_image") \
+            and field == "data":
+            rosboard.compression.compress_compressed_image(msg, output, resize_image=resize_image)
             continue
 
         # Image: compress to jpeg
-        if (
-            msg.__module__ == "sensor_msgs.msg._Image"
-            or msg.__module__ == "sensor_msgs.msg._image"
-        ) and field == "data":
-            rosboard.compression.compress_image(msg, output, resize_image=resize_image)
+        if (msg.__module__ == "sensor_msgs.msg._Image" or \
+            msg.__module__ == "sensor_msgs.msg._image") \
+            and field == "data":
+            rosboard.compression.compress_image(msg, output,resize_image=resize_image)
             continue
 
         # Image/CompressedImage: adapt encoding
-        if (
-            msg.__module__ in ("sensor_msgs.msg._Image", "sensor_msgs.msg._image")
-            or msg.__module__
-            in ("sensor_msgs.msg._CompressedImage", "sensor_msgs.msg._compressed_image")
-        ) and field == "encoding":
+        if (msg.__module__ in ("sensor_msgs.msg._Image", "sensor_msgs.msg._image") or \
+            msg.__module__ in ("sensor_msgs.msg._CompressedImage", "sensor_msgs.msg._compressed_image")) \
+            and field == "encoding":
             # Because rosboard converts everything to uint8 RGB/Grayscale we need to adapt the encoding
             encoding = rosboard.compression.adapt_encoding(msg.encoding)
             output["encoding"] = encoding
             continue
 
         # OccupancyGrid: render and compress to jpeg
-        if (
-            msg.__module__ == "nav_msgs.msg._OccupancyGrid"
-            or msg.__module__ == "nav_msgs.msg._occupancy_grid"
-        ) and field == "data":
+        if (msg.__module__ == "nav_msgs.msg._OccupancyGrid" or \
+            msg.__module__ == "nav_msgs.msg._occupancy_grid") \
+            and field == "data":
             rosboard.compression.compress_occupancy_grid(msg, output)
             continue
 
         # LaserScan: reduce precision
-        if (
-            msg.__module__ == "sensor_msgs.msg._LaserScan"
-            or msg.__module__ == "sensor_msgs.msg._laser_scan"
-        ) and field == "ranges":
+        if (msg.__module__ == "sensor_msgs.msg._LaserScan" or \
+            msg.__module__ == "sensor_msgs.msg._laser_scan") \
+            and field == "ranges":
             rosboard.compression.compress_laser_scan(msg, output)
             continue
-        if (
-            msg.__module__ == "sensor_msgs.msg._LaserScan"
-            or msg.__module__ == "sensor_msgs.msg._laser_scan"
-        ) and field == "intensities":
+        if (msg.__module__ == "sensor_msgs.msg._LaserScan" or \
+            msg.__module__ == "sensor_msgs.msg._laser_scan") \
+            and field == "intensities":
             continue
 
         # PointCloud2: extract only necessary fields, reduce precision
-        if (
-            msg.__module__ == "sensor_msgs.msg._PointCloud2"
-            or msg.__module__ == "sensor_msgs.msg._point_cloud2"
-        ):
+        if (msg.__module__ == "sensor_msgs.msg._PointCloud2" or \
+            msg.__module__ == "sensor_msgs.msg._point_cloud2"):
             if field == "data":
                 rosboard.compression.compress_point_cloud2(msg, output)
                 continue
@@ -120,22 +104,18 @@ def ros2dict(
 
     return output
 
-
 if __name__ == "__main__":
     # Run unit tests
     print("str")
     print(ros2dict("test"))
     print("Path")
     from nav_msgs.msg import Path
-
     print(ros2dict(Path()))
     print("NavSatFix")
     from sensor_msgs.msg import NavSatFix
-
     print(ros2dict(NavSatFix()))
     print("Int32MultiArray")
     from std_msgs.msg import Int32MultiArray
-
     print(ros2dict(Int32MultiArray()))
     print("object (this should not work)")
     try:
