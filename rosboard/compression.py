@@ -145,8 +145,9 @@ def compress_compressed_image(msg, output, resize_image:bool=True):
     try:
         img = decode_jpeg(bytearray(msg.data))
         original_shape = img.shape
-        if (img.shape[0] > 800 or img.shape[1] > 800) and resize_image:
-            stride = int(np.ceil(max(img.shape[0] / 800.0, img.shape[1] / 800.0)))
+        max_dim = 800.0
+        if (img.shape[0] > max_dim or img.shape[1] > max_dim) and resize_image:
+            stride = int(np.ceil(max(img.shape[0] / max_dim, img.shape[1] / max_dim)))
             img = img[::stride,::stride]
             img_jpeg = encode_jpeg(img)
         else:
@@ -180,11 +181,21 @@ def compress_image(msg, output, resize_image:bool=True):
     if len(cv2_img.shape) == 3 and cv2_img.shape[2] == 2:
         cv2_img = np.stack((cv2_img[:,:,0], cv2_img[:,:,1], np.zeros(cv2_img[:,:,0].shape)), axis = -1)
 
-    # enforce <800px max dimension, and do a stride-based resize
-    if (cv2_img.shape[0] > 800 or cv2_img.shape[1] > 800) and resize_image:
-        stride = int(np.ceil(max(cv2_img.shape[0] / 800.0, cv2_img.shape[1] / 800.0)))
+    # enforce <800px max dimension, and do a stride-based resize for efficiency
+    max_dim = 800.0
+    if (cv2_img.shape[0] > max_dim or cv2_img.shape[1] > max_dim) and resize_image:
+        stride = int(np.ceil(max(cv2_img.shape[0] / max_dim, cv2_img.shape[1] / max_dim)))
         cv2_img = cv2_img[::stride,::stride]
-    
+        
+        # Update the height and width in the message itself
+        h,w = cv2_img.shape[:2]
+        msg.height = h
+        msg.width = w
+        # Now update step in the message
+        # 3 bytes per pixel (RGB) or 1 byte per pixel (grayscale)
+        msg.step = w * 3 if len(cv2_img.shape) == 3 else w
+
+   
     # if image format isn't already uint8, make it uint8 for visualization purposes
     if cv2_img.dtype != np.uint8:
         if cv2_img.dtype == np.uint64:

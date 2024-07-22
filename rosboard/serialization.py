@@ -42,6 +42,10 @@ def ros2dict(msg, resize_image:bool=True):
             msg.__module__ == "sensor_msgs.msg._image") \
             and field == "data":
             rosboard.compression.compress_image(msg, output,resize_image=resize_image)
+            # Force output to have correct height, width, and step if the image was resized
+            output["height"] = msg.height
+            output["width"] = msg.width
+            output["step"] = msg.step
             continue
 
         # Image/CompressedImage: adapt encoding
