@@ -29,6 +29,9 @@ from rosboard.topics import (
     update_all_topics_with_typedef,
 )
 
+from rosboard.config import COOKIE_SECRET, validate_config
+
+
 
 class ROSBoardNode(object):
     instance = None
@@ -103,7 +106,6 @@ class ROSBoardNode(object):
         self.event_loop = None
         
         # Import and validate configuration
-        from rosboard.config import COOKIE_SECRET, validate_config
         validate_config()
         
         tornado_settings = {
