@@ -6,22 +6,22 @@ Configuration file for ROSboard authentication
 import os
 
 # Google OAuth Configuration
-GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+GOOGLE_CLIENT_ID = os.environ.get("ROSBOARD_GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.environ.get("ROSBOARD_GOOGLE_CLIENT_SECRET")
 
 # Cookie Configuration
-COOKIE_SECRET = os.environ.get("COOKIE_SECRET", "rosboard_default_secret_change_in_production")
+COOKIE_SECRET = os.environ.get("ROSBOARD_COOKIE_SECRET", "rosboard_default_secret_change_in_production")
 
 # Domain Whitelist Configuration
-ALLOWED_EMAIL_DOMAINS = os.environ.get("ALLOWED_EMAIL_DOMAINS", "").split(",")
+ALLOWED_EMAIL_DOMAINS = os.environ.get("ROSBOARD_ALLOWED_EMAIL_DOMAINS", "").split(",")
 if ALLOWED_EMAIL_DOMAINS == [""]:  # Handle empty string case
     ALLOWED_EMAIL_DOMAINS = []
 
 # Persistent Session Configuration
 # This is used to store the session data for the Foxglove connection in case rosboard dies
 # So we can associate the Foxglove connection with the last user that was connected
-PERSISTENT_SESSION_FILE = os.environ.get("PERSISTENT_SESSION_FILE", "rosboard_foxglove_sessions.pkl")
-PERSISTENT_SESSION_TIMEOUT = int(os.environ.get("PERSISTENT_SESSION_TIMEOUT", "60"))  # seconds
+PERSISTENT_SESSION_FILE = os.environ.get("ROSBOARD_PERSISTENT_SESSION_FILE", "rosboard_foxglove_sessions.pkl")
+PERSISTENT_SESSION_TIMEOUT = int(os.environ.get("ROSBOARD_PERSISTENT_SESSION_TIMEOUT", "60"))  # seconds
 
 def is_email_domain_allowed(email):
     """Check if the email domain is in the allowed whitelist"""

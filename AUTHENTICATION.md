@@ -23,27 +23,27 @@ ROSboard now includes Google OAuth device authentication to secure access to you
 Set these environment variables before running ROSboard:
 
 ```bash
-export GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
-export GOOGLE_CLIENT_SECRET="your-google-client-secret"
-export COOKIE_SECRET="your-secure-cookie-secret"
-export ALLOWED_EMAIL_DOMAINS="kiwibot.com,company.com"  # Restrict access to specific domains (optional)
+export ROSBOARD_GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
+export ROSBOARD_GOOGLE_CLIENT_SECRET="your-google-client-secret"
+export ROSBOARD_COOKIE_SECRET="your-secure-cookie-secret"
+export ROSBOARD_ALLOWED_EMAIL_DOMAINS="kiwibot.com,company.com"  # Restrict access to specific domains (optional)
 ```
 
 ### Domain Whitelisting
 
-The `ALLOWED_EMAIL_DOMAINS` environment variable allows you to restrict access to users with emails from specific domains:
+The `ROSBOARD_ALLOWED_EMAIL_DOMAINS` environment variable allows you to restrict access to users with emails from specific domains:
 
 #### **Configuration Examples:**
 
 ```bash
 # Allow only Kiwibot employees
-export ALLOWED_EMAIL_DOMAINS="kiwibot.com"
+export ROSBOARD_ALLOWED_EMAIL_DOMAINS="kiwibot.com"
 
 # Allow multiple company domains
-export ALLOWED_EMAIL_DOMAINS="kiwibot.com,company.com,startup.io"
+export ROSBOARD_ALLOWED_EMAIL_DOMAINS="kiwibot.com,company.com,startup.io"
 
 # No restrictions (default behavior)
-export ALLOWED_EMAIL_DOMAINS=""  # or don't set the variable
+export ROSBOARD_ALLOWED_EMAIL_DOMAINS=""  # or don't set the variable
 ```
 
 #### **How It Works:**
