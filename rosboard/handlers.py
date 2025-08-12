@@ -4,13 +4,13 @@ import time
 import traceback
 import types
 import uuid
-import os
 import asyncio
 import pickle
 from pathlib import Path
 
 import threading
 import time
+import sys
 
 import tornado
 import tornado.web
@@ -21,6 +21,8 @@ from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
 # This brakes ROS1 support
 from rosboard.topics import get_all_topics, update_all_topics_with_typedef
+from rosboard_msgs.msg import SessionMetrics
+from std_msgs.msg import Header
 from rosboard.ros_init import rospy
 
 # Config stuff for auth
@@ -409,7 +411,7 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         # Allow connections from any origin so we can connect from other pages
         return True
 
-    def initialize(self, node, max_allowed_latency, full_topics, allow_external_clients):
+    def initialize(self, node, max_allowed_latency, full_topics, allow_external_clients, metrics_publisher=None, auto_shutdown_time=0):
         # store the instance of the ROS node that created this WebSocketHandler so we can access it later
         self.node = node
         self.max_allowed_latency = max_allowed_latency
@@ -418,6 +420,42 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         # Cache the topics and their typedefs since this can be slow
         # This is a dict by reference, so it will be updated by the rosboard node
         self.full_topics = full_topics
+        self.metrics_publisher = metrics_publisher
+        self.auto_shutdown_time = auto_shutdown_time
+        
+    def write_message(self, message, binary=False):
+        """Override write_message to track actual compressed bytes sent."""
+        # Store original stream write method to intercept actual bytes written
+        original_stream = self.ws_connection.stream
+        original_write = original_stream.write
+        bytes_written = [0]  # Use list for closure
+        
+        def counting_write(data):
+            """Intercept stream.write to count actual bytes"""
+            bytes_written[0] += len(data) if data else 0
+            return original_write(data)
+        
+        # Temporarily replace the write method
+        original_stream.write = counting_write
+        
+        try:
+            # Call the original write_message (this will trigger compression and framing)
+            super().write_message(message, binary)
+            
+            # Track the actual bytes written to the stream (compressed + headers)
+            compressed_size = bytes_written[0]
+            self.session_bytes_sent += compressed_size
+            
+        finally:
+            # Restore original write method
+            original_stream.write = original_write
+    
+    def _publish_session_metrics(self, msg):
+        """Publish session metrics using the message type."""
+        if not self.metrics_publisher:
+            return
+            
+        self.metrics_publisher.publish(msg)
 
     def get_compression_options(self):
         # Non-None enables compression with default options.
@@ -520,6 +558,11 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         # Save persistent sessions if this is a Foxglove connection (capture current state)
         if getattr(self, 'client_type', '') == 'foxglove' and user_email != 'external_client':
             ROSBoardSocketHandler.save_persistent_sessions()
+        # Always initialize session tracking for auto-shutdown and metrics
+        self.session_start_time = time.time()
+        self.session_bytes_sent = 0
+        self.session_bytes_received = 0
+        self.session_topics_accessed = set()
 
         self.write_message(json.dumps([ROSBoardSocketHandler.MSG_SYSTEM, {
             "hostname": socket.gethostname(),
@@ -547,6 +590,41 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         return False
 
     def on_close(self):
+        # Publish final session metrics if enabled
+        if self.metrics_publisher:
+            
+            end_time = time.time()
+            duration = end_time - self.session_start_time
+            
+            # Determine close reason
+            close_reason = 'normal_close'
+            try:
+                if self.close_code == 1001:
+                    close_reason = 'going_away'
+                elif self.close_code == 1006:
+                    close_reason = 'abnormal_close'
+                elif self.close_code != 1000:
+                    close_reason = f'close_code_{self.close_code}'
+            except AttributeError:
+                pass
+            
+            msg = SessionMetrics()
+            msg.header = Header()
+            msg.header.stamp = rospy.Time.now()
+            msg.header.frame_id = 'rosboard_metrics'
+            
+            msg.session_id = str(self.id)
+            msg.client_ip = self.request.remote_ip
+            msg.start_time = self.session_start_time
+            msg.end_time = end_time
+            msg.duration_seconds = duration
+            msg.bytes_sent = self.session_bytes_sent
+            msg.bytes_received = self.session_bytes_received
+            msg.topics_accessed = list(self.session_topics_accessed)
+            msg.close_reason = close_reason
+            
+            self._publish_session_metrics(msg)
+            
         # Remove from global tracking
         ROSBoardSocketHandler.sockets.remove(self)
         
@@ -673,6 +751,7 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         try:
             if message[0] in [ROSBoardSocketHandler.MSG_TOPICS, ROSBoardSocketHandler.MSG_TOPICS_FULL]:
                 json_msg = json.dumps(message, separators=(',', ':'))
+                
                 for curr_socket in cls.sockets:
                     if curr_socket.ws_connection and not curr_socket.ws_connection.is_closing():
                         curr_socket.write_message(json_msg)
@@ -692,6 +771,8 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
                         if json_msg is None:
                             json_msg = json.dumps(message, separators=(',', ':'))
                         curr_socket.write_message(json_msg)
+                        
+                        curr_socket.session_topics_accessed.add(topic_name)
                     curr_socket.last_data_times_by_topic[topic_name] = t
         except Exception as e:
             print("Error sending message: %s" % str(e))
@@ -701,6 +782,18 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         """
         Message received from the client.
         """
+        
+        # Track received message and check auto-shutdown
+        message_bytes = len(message.encode('utf-8'))
+        self.session_bytes_received += message_bytes
+        
+        # Check if auto-shutdown time has expired
+        if self.auto_shutdown_time > 0:
+            current_time = time.time()
+            if current_time - self.session_start_time >= self.auto_shutdown_time:
+                rospy.logwarn(f"Session auto-shutdown triggered after {self.auto_shutdown_time} seconds for socket {self.id}")
+                self.close(code=1000, reason="Session timeout expired")
+                return
 
         if self.ws_connection is None or self.ws_connection.is_closing():
             return
@@ -745,6 +838,9 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
             # Check if the rosboard node was launched with a this topic type as 
             # as a parameter which indicates its max rate to be streamed
             topic_type = get_all_topics().get(topic_name)
+            if topic_type is None:
+                print(f"Skipping subscription to topic {topic_name} because it is not in the list of topics so its type cannot be guessed")
+                return
             topic_type_max_rate = rospy.get_param(topic_type)
             set_topic_type_max_rate = topic_type is not None and topic_type_max_rate is not None
             if set_topic_type_max_rate:
@@ -778,6 +874,10 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
 
             self.node.remote_subs[topic_name].add(self.id)
             self.node.sync_subs()
+            
+            # Track topic access
+            if topic_name:
+                self.session_topics_accessed.add(topic_name)
 
         # client wants to unsubscribe from topic
         elif argv[0] == ROSBoardSocketHandler.MSG_UNSUB:
