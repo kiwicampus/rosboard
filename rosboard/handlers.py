@@ -86,7 +86,7 @@ class AuthStartHandler(tornado.web.RequestHandler):
             "device_code": data["device_code"],
             "user_code": data["user_code"],
             "verification_url": data["verification_url"],
-            "interval": data.get("interval", 2.5),
+            "interval": 2.5, # Hardcoded to 2.5 for better UX # data.get("interval", 2.5),
             "expires_in": data.get("expires_in", 600)
         })
 
@@ -373,7 +373,7 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
             # Find the most recent session
             if sessions:
                 most_recent_email = max(sessions.keys(), key=lambda email: sessions[email])
-                most_recent_time = sessions[email]
+                most_recent_time = sessions[most_recent_email]
                 
                 # Check if it's within configured timeout
                 if time.time() - most_recent_time <= PERSISTENT_SESSION_TIMEOUT:
@@ -522,7 +522,7 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         # Initialize persistent sessions on first connection (before processing anything)
         if len(ROSBoardSocketHandler.sockets) == 0:
             ROSBoardSocketHandler.initialize_persistent_sessions()
-                
+        
         if not self.handle_auth():
             return
 
@@ -845,18 +845,18 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
             if topic_type is None:
                 print(f"Skipping subscription to topic {topic_name} because it is not in the list of topics so its type cannot be guessed")
                 return
-            topic_type_max_rate = rospy.get_param(topic_type)
-            set_topic_type_max_rate = topic_type is not None and topic_type_max_rate is not None
+            topic_type_max_rate = rospy.get_param(topic_type, 0)
+            set_topic_type_max_rate = topic_type is not None and topic_type_max_rate is not None and topic_type_max_rate > 0
             if set_topic_type_max_rate:
                 max_update_rate = topic_type_max_rate
                 print(f"info: param for topic type {topic_type} set, " 
                     f"setting {topic_name} to max rate of {topic_type_max_rate}")
              
-            # Check if the rosboard node was lunched with this topic name as
+            # Check if the rosboard node was launched with this topic name as
             # a parameter which indicates its max rate to be streamed
             param_name = f"topic.{topic_name}" # must be like this because otherwise it thinks it is a param of another node
-            topic_name_max_rate = rospy.get_param(param_name)
-            if topic_name_max_rate is not None:
+            topic_name_max_rate = rospy.get_param(param_name, 0)
+            if topic_name_max_rate is not None and topic_name_max_rate > 0:
                 max_update_rate = topic_name_max_rate
                 if set_topic_type_max_rate:
                     print("info: overriding topic type max rate because specific topic name has prevalence")
@@ -907,7 +907,8 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
 
             try:
                 if topic_name not in self.node.local_pubs:
-                    print("WARN: Attempted to remove unavailable topic.")
+                    # print("WARN: Attempted to remove unavailable topic.")
+                    pass
                 else:
                     self.node.local_pubs[topic_name].unregister()
                     self.node.local_pubs.pop(topic_name)
