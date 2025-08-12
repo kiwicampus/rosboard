@@ -16,6 +16,9 @@ import tornado
 import tornado.web
 import tornado.websocket
 
+from urllib.parse import urlencode
+from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+
 # This brakes ROS1 support
 from rosboard.topics import get_all_topics, update_all_topics_with_typedef
 from rosboard.ros_init import rospy
@@ -57,8 +60,6 @@ class AuthStartHandler(tornado.web.RequestHandler):
         if not GOOGLE_CLIENT_ID:
             return self.write_json({"error": "server_not_configured", "detail": "Missing GOOGLE_CLIENT_ID"}, 500)
 
-        from urllib.parse import urlencode
-        from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
         body = urlencode({
             "client_id": GOOGLE_CLIENT_ID,
@@ -111,9 +112,6 @@ class AuthPollHandler(tornado.web.RequestHandler):
         device_code = payload.get("device_code")
         if not device_code:
             return self.write_json({"error": "missing_device_code"}, 400)
-
-        from urllib.parse import urlencode
-        from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 
         body = urlencode({
             "client_id": GOOGLE_CLIENT_ID,
@@ -168,7 +166,7 @@ class AuthPollHandler(tornado.web.RequestHandler):
             expires_days=60,
             httponly=True,
             samesite="Lax",
-            secure=False  # set True if you serve over HTTPS
+            secure=True  # serve over HTTPS
         )
 
         return self.write_json(result, 200)
@@ -183,7 +181,6 @@ class MeHandler(tornado.web.RequestHandler):
             self.finish(json.dumps({"authenticated": True, "email": user.get("email"), "sub": user.get("sub")}))
         else:
             # Check if authentication is enabled
-            from rosboard.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
             if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
                 self.finish(json.dumps({"authenticated": False, "auth_required": True}))
             else:
@@ -248,9 +245,7 @@ class AuthenticatedHandler(tornado.web.RequestHandler):
     """Base handler that requires authentication (if enabled)"""
     
     def prepare(self):
-        # Check if authentication is enabled
-        from rosboard.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
-        
+        # Check if authentication is enabled        
         if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
             # Authentication disabled, allow access
             return
