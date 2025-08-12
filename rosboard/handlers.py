@@ -592,7 +592,7 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
 
     def on_close(self):
         # Publish final session metrics if enabled
-        if self.metrics_publisher:
+        if self.metrics_publisher and hasattr(self, 'session_start_time'):
             
             end_time = time.time()
             duration = end_time - self.session_start_time
