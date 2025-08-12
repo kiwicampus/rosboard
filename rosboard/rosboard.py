@@ -96,7 +96,7 @@ class ROSBoardNode(object):
                     "node": self,
                     "max_allowed_latency": self.max_allowed_latency,
                     "full_topics": self.shared_full_topics,
-                    "allow_external_clients": self.allow_external_clients
+                    "allow_external_clients": self.allow_external_clients,
                     "metrics_publisher": self.metrics_publisher,
                     "auto_shutdown_time": self.auto_shutdown_time
                 }),

@@ -1,4 +1,5 @@
 import json
+import os
 import socket
 import time
 import traceback
@@ -615,6 +616,9 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
             
             msg.session_id = str(self.id)
             msg.client_ip = self.request.remote_ip
+            msg.user_email = self.user.get('email', 'unknown')
+            msg.client_type = getattr(self, 'client_type', 'unknown')
+            msg.auth_method = getattr(self, 'auth_method', 'unknown')
             msg.start_time = self.session_start_time
             msg.end_time = end_time
             msg.duration_seconds = duration
