@@ -31,6 +31,17 @@
               <span class="mdl-layout-title">ROSboard</span>
               <!-- Add spacer, to align navigation to the right -->
               <div class="mdl-layout-spacer"></div>
+              
+              <!-- User info and logout -->
+              <span id="user-info" style="margin-right: 1rem; color: white; display: none;">
+                Welcome, <span id="user-email"></span>
+              </span>
+              <button id="logoutButton" 
+                class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent"
+                style="margin-right: 1rem; display: none;">
+                Logout
+              </button>
+              
         <!-- Foxglove redirect button -->
         <button id="redirectButton"
           class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent">
@@ -77,6 +88,45 @@
         target_url += '&layoutUrl=' + foxglove_layout_uri;
       }
       window.location.href = target_url;
+    };
+
+    // Authentication check
+    (async function() {
+      try {
+        const response = await fetch('/me');
+        const data = await response.json();
+        
+        if (data.authenticated) {
+          // Show user info and logout button
+          document.getElementById('user-email').textContent = data.email || 'User';
+          document.getElementById('user-info').style.display = 'inline';
+          document.getElementById('logoutButton').style.display = 'inline';
+        } else if (data.error === 'authentication_required') {
+          // Authentication is enabled but user not logged in
+          window.location.href = '/login.html';
+        } else {
+          // Authentication disabled or other error - show as anonymous
+          document.getElementById('user-email').textContent = 'Anonymous';
+          document.getElementById('user-info').style.display = 'inline';
+          document.getElementById('logoutButton').style.display = 'none';
+        }
+      } catch (error) {
+        console.error('Authentication check failed:', error);
+        // On error, assume authentication is disabled and show as anonymous
+        document.getElementById('user-email').textContent = 'Anonymous';
+        document.getElementById('user-info').style.display = 'inline';
+        document.getElementById('logoutButton').style.display = 'none';
+      }
+    })();
+
+    // Logout functionality
+    document.getElementById('logoutButton').onclick = async function() {
+      try {
+        await fetch('/logout', { method: 'POST' });
+        window.location.href = '/login.html';
+      } catch (error) {
+        console.error('Logout failed:', error);
+      }
     };
   </script>
 

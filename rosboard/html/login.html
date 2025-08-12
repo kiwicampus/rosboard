@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>ROSboard - Sign In</title>
+  <link href="css/material-icons.css" media="all" rel="stylesheet" type="text/css">
+  <link rel="stylesheet" href="css/material.indigo-blue.min.css" />
+  <link href="css/index.css" media="all" rel="stylesheet" type="text/css">
+  <style>
+    .login-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .login-card {
+      background: white;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+    }
+    .login-card h1 {
+      color: #333;
+      margin-bottom: 1rem;
+    }
+    .login-card p {
+      color: #666;
+      margin-bottom: 1.5rem;
+    }
+    .verification-link {
+      background: #f5f5f5;
+      padding: 1rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+      word-break: break-all;
+    }
+    .user-code {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #2196F3;
+      background: #e3f2fd;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+      display: inline-block;
+    }
+    .qr-container {
+      margin: 1rem 0;
+    }
+    .loading {
+      display: none;
+      color: #666;
+      font-style: italic;
+    }
+    .error {
+      color: #f44336;
+      margin: 1rem 0;
+      display: none;
+    }
+    .user-code-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin: 1rem 0;
+    }
+    .user-code {
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #2196F3;
+      background: #e3f2fd;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      display: inline-block;
+      min-width: 120px;
+      text-align: center;
+      border: 2px solid #2196F3;
+      user-select: text;
+      cursor: text;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 2px;
+    }
+    .copy-button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      font-size: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .copy-button:hover {
+      background-color: #388E3C;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    .copy-button:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .copy-icon {
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-card">
+      <h1>Welcome to ROSboard</h1>
+      <p>Sign in with your Google account to access ROS topics and system data.</p>
+      
+      <div id="login-form">
+        <button id="start-auth" class="mdl-button mdl-js-button mdl-button--raised mdl-js-ripple-effect mdl-button--accent">
+          Sign in with Google
+        </button>
+        <div id="auth-disabled" style="display: none; margin-top: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 4px;">
+          <p style="margin: 0; color: #666;">
+            Authentication is currently disabled. You can access ROSboard directly.
+          </p>
+          <button onclick="window.location.href='/'" style="margin-top: 0.5rem; padding: 0.5rem 1rem; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">
+            Go to ROSboard
+          </button>
+        </div>
+      </div>
+      
+      <div id="auth-flow" style="display: none;">
+        <p>Go to this URL to sign in:</p>
+        <div class="verification-link">
+          <a id="verify-link" href="" target="_blank"></a>
+        </div>
+        
+        <p>Enter this code:</p>
+        <div class="user-code-container">
+          <div class="user-code" id="user-code"></div>
+          <button id="copy-code" class="copy-button" title="Copy to clipboard" style="display: none;">
+            <span class="copy-icon">📋</span>
+          </button>
+        </div>
+        
+        <p>Or scan this QR code:</p>
+        <div class="qr-container">
+          <canvas id="qr"></canvas>
+        </div>
+        
+        <div class="loading" id="loading">
+          Checking authentication status...
+        </div>
+        
+        <div class="error" id="error"></div>
+        <div class="success" id="success" style="display: none; color: #4CAF50; margin: 1rem 0; font-weight: bold;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <script>
+    (async function () {
+      let pollTimer, deviceCode;
+
+      async function checkSession() {
+        try {
+          const r = await fetch('/me');
+          const data = await r.json();
+          
+          if (data.authenticated) {
+            // Redirect to main page if already authenticated
+            window.location.href = '/';
+            return true;
+          } else if (!data.auth_required) {
+            // Authentication disabled, show message and button
+            document.getElementById('start-auth').style.display = 'none';
+            document.getElementById('auth-disabled').style.display = 'block';
+            return true;
+          } else {
+            // User not authenticated, stay on login page
+            return false;
+          }
+        } catch (e) {
+          console.error('Login page: Session check failed:', e);
+          // On error, stay on login page
+          return false;
+        }
+      }
+
+      async function startAuth() {
+        try {
+          document.getElementById('start-auth').style.display = 'none';
+          document.getElementById('auth-flow').style.display = 'block';
+          
+          const resp = await fetch('/auth/start', { method: 'POST' });
+          const data = await resp.json();
+
+          if (resp.status !== 200) {
+            throw new Error(data.error || 'Failed to start authentication');
+          }
+
+          document.getElementById('verify-link').href = data.verification_url;
+          document.getElementById('verify-link').textContent = data.verification_url;
+          document.getElementById('user-code').textContent = data.user_code;
+          
+          // Show copy button now that we have a code
+          document.getElementById('copy-code').style.display = 'flex';
+          
+          // Generate QR code
+          QRCode.toCanvas(document.getElementById('qr'), data.verification_url, { 
+            width: 128,
+            margin: 2
+          });
+
+          deviceCode = data.device_code;
+          pollTimer = setInterval(pollAuth, (data.interval || 5) * 1000);
+          
+        } catch (error) {
+          showError(error.message);
+        }
+      }
+
+      async function pollAuth() {
+        try {
+          document.getElementById('loading').style.display = 'block';
+          
+          const resp = await fetch('/auth/poll', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ device_code: deviceCode })
+          });
+          
+          if (resp.status === 200) {
+            const data = await resp.json();
+            clearInterval(pollTimer);
+            document.getElementById('loading').style.display = 'none';
+            
+            // Success! Redirect to main page
+            window.location.href = '/';
+          } else if (resp.status === 202) {
+            // Still waiting, keep polling
+            document.getElementById('loading').style.display = 'none';
+          } else {
+            clearInterval(pollTimer);
+            throw new Error('Authentication failed');
+          }
+        } catch (error) {
+          clearInterval(pollTimer);
+          showError('Authentication failed. Please try again.');
+        }
+      }
+
+      function showError(message) {
+        const errorEl = document.getElementById('error');
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+        document.getElementById('loading').style.display = 'none';
+      }
+
+      document.getElementById('start-auth').addEventListener('click', startAuth);
+
+      // Copy to clipboard functionality
+      document.getElementById('copy-code').addEventListener('click', async function() {
+        const userCode = document.getElementById('user-code').textContent;
+        if (!userCode) {
+          return; // No code to copy
+        }
+        
+        try {
+          await navigator.clipboard.writeText(userCode);
+          
+          // Visual feedback
+          const button = this;
+          const originalText = button.innerHTML;
+          button.innerHTML = '<span class="copy-icon">✅</span>';
+          button.style.backgroundColor = '#4CAF50';
+          button.title = 'Copied!';
+          
+          // Show success message
+          const successEl = document.getElementById('success');
+          successEl.textContent = 'Code copied to clipboard!';
+          successEl.style.display = 'block';
+          
+          // Reset after 2 seconds
+          setTimeout(() => {
+            button.innerHTML = originalText;
+            button.title = 'Copy to clipboard';
+            successEl.style.display = 'none';
+          }, 2000);
+          
+        } catch (err) {
+          console.error('Failed to copy: ', err);
+          
+          // Fallback for older browsers
+          const textArea = document.createElement('textarea');
+          textArea.value = userCode;
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+          
+          // Visual feedback for fallback
+          const button = this;
+          const originalText = button.innerHTML;
+          button.innerHTML = '<span class="copy-icon">✅</span>';
+          button.style.backgroundColor = '#4CAF50';
+          button.title = 'Copied!';
+          
+          // Show success message
+          const successEl = document.getElementById('success');
+          successEl.textContent = 'Code copied to clipboard!';
+          successEl.style.display = 'block';
+          
+          setTimeout(() => {
+            button.innerHTML = originalText;
+            button.title = 'Copy to clipboard';
+            successEl.style.display = 'none';
+          }, 2000);
+        }
+      });
+
+      // Boot: if session exists, skip auth
+      if (!(await checkSession())) {
+        startAuth();
+      }
+    })();
+  </script>
+</body>
+</html> 

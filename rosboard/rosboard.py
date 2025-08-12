@@ -15,7 +15,7 @@ from rosboard.ros_init import rospy
 from rclpy_message_converter.message_converter import convert_dictionary_to_ros_message
 from rosgraph_msgs.msg import Log
 
-from rosboard.handlers import MainPageHandler, ROSBoardSocketHandler
+from rosboard.handlers import MainPageHandler, ROSBoardSocketHandler, AuthStartHandler, AuthPollHandler, MeHandler, LogoutHandler, LoginPageHandler
 from rosboard.serialization import ros2dict
 from rosboard.subscribers.dmesg_subscriber import DMesgSubscriber
 from rosboard.subscribers.dummy_subscriber import DummySubscriber
@@ -70,16 +70,11 @@ class ROSBoardNode(object):
             self.sub_rosout = rospy.Subscriber("/rosout", Log, lambda x:x)
 
         static_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'html')
-        tornado_settings = {
-            'debug': True, 
-            'static_path':static_path,
-            'template_path':static_path
-        }
-
+        
         # Start by passing the topics and their typedefs for caching
         # TODO: add ros1 support for this
         self.shared_full_topics = get_all_topics_with_typedef()
-
+        
         tornado_handlers = [
                 (r"/rosboard/v1", ROSBoardSocketHandler, {
                     "node": self,
@@ -91,12 +86,29 @@ class ROSBoardNode(object):
                     "foxglove_uri": self.foxglove_uri,
                     "foxglove_layout_uri": self.foxglove_layout_uri
                 }),
+                (r"/login.html", LoginPageHandler),
+                (r"/auth/start", AuthStartHandler),
+                (r"/auth/poll", AuthPollHandler),
+                (r"/me", MeHandler),
+                (r"/logout", LogoutHandler),
                 (r"/js/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(static_path, 'js')}),
                 (r"/css/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(static_path, 'css')}),
                 (r"/fonts/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(static_path, 'fonts')}),
         ]
 
         self.event_loop = None
+        
+        # Import and validate configuration
+        from rosboard.config import COOKIE_SECRET, validate_config
+        validate_config()
+        
+        tornado_settings = {
+            'debug': True, 
+            'static_path':static_path,
+            'template_path':static_path,
+            'cookie_secret': COOKIE_SECRET
+        }
+        
         self.tornado_application = tornado.web.Application(tornado_handlers, **tornado_settings)
         asyncio.set_event_loop(asyncio.new_event_loop())
         self.event_loop = tornado.ioloop.IOLoop()

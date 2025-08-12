@@ -12,6 +12,9 @@ setup(
     install_requires=[
         'setuptools',
         'tornado>=4.2.1',
+        'google-auth',
+        'google-auth-oauthlib',
+        'pyjwt',
     ],
     extras_require = {
         'system_stats': ['psutil'],

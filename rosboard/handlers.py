@@ -4,6 +4,8 @@ import time
 import traceback
 import types
 import uuid
+import os
+import asyncio
 
 import tornado
 import tornado.web
@@ -12,11 +14,217 @@ import tornado.websocket
 # This brakes ROS1 support
 from rosboard.topics import get_all_topics, update_all_topics_with_typedef
 from rosboard.ros_init import rospy
+from rosboard.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, DEVICE_CODE_URL, TOKEN_URL
 
 from . import __version__
 
+def current_user_from_cookie(handler):
+    """Extract user data from secure cookie"""
+    data = handler.get_secure_cookie("session")
+    if not data:
+        return None
+    try:
+        return json.loads(data.decode("utf-8"))
+    except Exception:
+        return None
 
-class MainPageHandler(tornado.web.RequestHandler):
+class AuthStartHandler(tornado.web.RequestHandler):
+    """Handler to start Google OAuth device flow"""
+    
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "content-type")
+        self.set_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+
+    def options(self):
+        self.set_status(204)
+        self.finish()
+
+    def write_json(self, obj, status=200):
+        self.set_status(status)
+        self.set_header("Content-Type", "application/json")
+        self.finish(json.dumps(obj))
+
+    async def post(self):
+        if not GOOGLE_CLIENT_ID:
+            return self.write_json({"error": "server_not_configured", "detail": "Missing GOOGLE_CLIENT_ID"}, 500)
+
+        from urllib.parse import urlencode
+        from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+
+        body = urlencode({
+            "client_id": GOOGLE_CLIENT_ID,
+            "scope": "openid email profile"
+        })
+        req = HTTPRequest(
+            DEVICE_CODE_URL,
+            method="POST",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            body=body,
+        )
+        http = AsyncHTTPClient()
+        resp = await http.fetch(req, raise_error=False)
+
+        if resp.code != 200:
+            return self.write_json({"error": "google_device_code_failed", "detail": resp.body.decode()}, 502)
+
+        data = json.loads(resp.body.decode())
+        self.write_json({
+            "device_code": data["device_code"],
+            "user_code": data["user_code"],
+            "verification_url": data["verification_url"],
+            "interval": data.get("interval", 5),
+            "expires_in": data.get("expires_in", 600)
+        })
+
+class AuthPollHandler(tornado.web.RequestHandler):
+    """Handler to poll for OAuth completion"""
+    
+    def set_default_headers(self):
+        self.set_header("Access-Control-Allow-Origin", "*")
+        self.set_header("Access-Control-Allow-Headers", "content-type")
+        self.set_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+
+    def options(self):
+        self.set_status(204)
+        self.finish()
+
+    def write_json(self, obj, status=200):
+        self.set_status(status)
+        self.set_header("Content-Type", "application/json")
+        self.finish(json.dumps(obj))
+
+    async def post(self):
+        try:
+            payload = json.loads(self.request.body.decode() or "{}")
+        except Exception:
+            payload = {}
+
+        device_code = payload.get("device_code")
+        if not device_code:
+            return self.write_json({"error": "missing_device_code"}, 400)
+
+        from urllib.parse import urlencode
+        from tornado.httpclient import AsyncHTTPClient, HTTPRequest
+
+        body = urlencode({
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "device_code": device_code,
+            "grant_type": "urn:ietf:params:oauth:grant-type:device_code"
+        })
+        req = HTTPRequest(
+            TOKEN_URL,
+            method="POST",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            body=body,
+        )
+        http = AsyncHTTPClient()
+        resp = await http.fetch(req, raise_error=False)
+        data = json.loads(resp.body.decode())
+
+        # If authorization is not complete yet, Google returns an error
+        if "error" in data:
+            return self.write_json(data, 202)
+
+        # We should have id_token
+        id_tok = data.get("id_token")
+        if not id_tok:
+            return self.write_json({"error": "no_id_token", "detail": data}, 502)
+
+        # Verify the id_token
+        loop = asyncio.get_running_loop()
+        def _verify():
+            from google.oauth2 import id_token
+            from google.auth.transport import requests as grequests
+            req = grequests.Request()
+            return id_token.verify_oauth2_token(id_tok, req, GOOGLE_CLIENT_ID)
+
+        try:
+            claims = await loop.run_in_executor(None, _verify)
+        except Exception as e:
+            return self.write_json({"error": "id_token_verification_failed", "detail": str(e)}, 401)
+
+        result = {
+            "email": claims.get("email"),
+            "email_verified": claims.get("email_verified"),
+            "sub": claims.get("sub"),
+            "name": claims.get("name"),
+            "picture": claims.get("picture"),
+        }
+
+        # Persist a session for ~30 days
+        self.set_secure_cookie(
+            "session",
+            json.dumps({"email": result["email"], "sub": result["sub"]}),
+            expires_days=60,
+            httponly=True,
+            samesite="Lax",
+            secure=False  # set True if you serve over HTTPS
+        )
+
+        return self.write_json(result, 200)
+
+class MeHandler(tornado.web.RequestHandler):
+    """Handler to check current user status"""
+    
+    def get(self):
+        user = current_user_from_cookie(self)
+        self.set_header("Content-Type", "application/json")
+        if user:
+            self.finish(json.dumps({"authenticated": True, "email": user.get("email"), "sub": user.get("sub")}))
+        else:
+            # Check if authentication is enabled
+            from rosboard.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+            if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
+                self.finish(json.dumps({"authenticated": False, "auth_required": True}))
+            else:
+                self.finish(json.dumps({"authenticated": False, "auth_required": False}))
+
+class LogoutHandler(tornado.web.RequestHandler):
+    """Handler to logout user"""
+    
+    def post(self):
+        self.clear_cookie("session")
+        self.set_header("Content-Type", "application/json")
+        self.finish(json.dumps({"ok": True}))
+
+class LoginPageHandler(tornado.web.RequestHandler):
+    """Handler for the login page"""
+    
+    def get(self):
+        self.set_header("Content-Type", "text/html")
+        static_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'html')
+        login_file = os.path.join(static_path, 'login.html')
+        
+        try:
+            with open(login_file, "r", encoding="utf-8") as f:
+                self.write(f.read())
+        except FileNotFoundError:
+            self.set_status(404)
+            self.write("Login page not found")
+
+class AuthenticatedHandler(tornado.web.RequestHandler):
+    """Base handler that requires authentication (if enabled)"""
+    
+    def prepare(self):
+        # Check if authentication is enabled
+        from rosboard.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+        
+        if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+            # Authentication disabled, allow access
+            return
+            
+        user = current_user_from_cookie(self)
+        if not user:
+            # Redirect to login page instead of returning JSON error
+            self.redirect('/login.html')
+            return
+        self.current_user = user
+
+
+class MainPageHandler(AuthenticatedHandler):
+    """Handler for the main page - requires authentication"""
 
     def get(self, path=None):
         self.render(self.default_filename, foxglove_uri=self.foxglove_uri, foxglove_layout_uri=self.foxglove_layout_uri)
@@ -52,6 +260,19 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         return {}
 
     def open(self):
+        # Check authentication before allowing WebSocket connection (if enabled)
+        from rosboard.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+        
+        if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
+            user = current_user_from_cookie(self)
+            if not user:
+                self.close(1008, "Authentication required")
+                return
+            self.user = user
+        else:
+            # Authentication disabled
+            self.user = {"email": "anonymous", "sub": "anonymous"}
+            
         self.id = uuid.uuid4()    # unique socket id
         self.latency = 0          # latency measurement
         self.last_ping_times = [0] * 1024
@@ -74,6 +295,7 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         self.write_message(json.dumps([ROSBoardSocketHandler.MSG_SYSTEM, {
             "hostname": socket.gethostname(),
             "version": __version__,
+            "user": self.user.get("email", "unknown")
         }], separators=(',', ':')))
 
     def on_close(self):
