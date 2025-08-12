@@ -61,7 +61,12 @@
     .error {
       color: #f44336;
       margin: 1rem 0;
-      display: none;
+      padding: 1rem;
+      background: rgba(244, 67, 54, 0.1);
+      border-radius: 4px;
+      font-size: 16px;  /* Increased from default */
+      font-weight: 500;  /* Made slightly bolder */
+      display: none;  /* Hidden by default */
     }
     .user-code-container {
       display: flex;
@@ -248,6 +253,11 @@
           } else if (resp.status === 202) {
             // Still waiting, keep polling
             document.getElementById('loading').style.display = 'none';
+          } else if (resp.status === 403) {
+            // Domain restriction error
+            const data = await resp.json();
+            clearInterval(pollTimer);
+            showError(data.detail || 'Access denied: Your email domain is not allowed.');
           } else {
             clearInterval(pollTimer);
             throw new Error('Authentication failed');

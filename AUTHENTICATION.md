@@ -26,7 +26,46 @@ Set these environment variables before running ROSboard:
 export GOOGLE_CLIENT_ID="your-google-client-id.apps.googleusercontent.com"
 export GOOGLE_CLIENT_SECRET="your-google-client-secret"
 export COOKIE_SECRET="your-secure-cookie-secret"
+export ALLOWED_EMAIL_DOMAINS="kiwibot.com,company.com"  # Restrict access to specific domains (optional)
 ```
+
+### Domain Whitelisting
+
+The `ALLOWED_EMAIL_DOMAINS` environment variable allows you to restrict access to users with emails from specific domains:
+
+#### **Configuration Examples:**
+
+```bash
+# Allow only Kiwibot employees
+export ALLOWED_EMAIL_DOMAINS="kiwibot.com"
+
+# Allow multiple company domains
+export ALLOWED_EMAIL_DOMAINS="kiwibot.com,company.com,startup.io"
+
+# No restrictions (default behavior)
+export ALLOWED_EMAIL_DOMAINS=""  # or don't set the variable
+```
+
+#### **How It Works:**
+
+1. **User attempts to authenticate** via Google OAuth
+2. **System checks email domain** against the whitelist
+3. **If domain is allowed**: Authentication proceeds normally ✅
+4. **If domain is blocked**: User receives "Access denied" error ❌
+
+#### **Security Benefits:**
+
+- **Restrict access** to company employees only
+- **Prevent unauthorized users** from accessing ROSboard
+- **Domain-level access control** without managing individual user lists
+- **Easy to update** when company domains change
+
+#### **Error Handling:**
+
+When a user with a blocked domain tries to authenticate, they'll see:
+- **Error message**: "Access denied: Your email domain is not allowed."
+- **HTTP status**: 403 Forbidden
+- **Clear feedback**: User knows why access was denied
 
 **Important**: 
 - `COOKIE_SECRET` should be a long, random string for production use

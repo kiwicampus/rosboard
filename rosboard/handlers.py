@@ -26,6 +26,7 @@ from rosboard.ros_init import rospy
 # Config stuff for auth
 from rosboard.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, DEVICE_CODE_URL, TOKEN_URL
 from rosboard.config import PERSISTENT_SESSION_FILE, PERSISTENT_SESSION_TIMEOUT
+from rosboard.config import is_email_domain_allowed
 
 from . import __version__
 
@@ -158,6 +159,13 @@ class AuthPollHandler(tornado.web.RequestHandler):
             "name": claims.get("name"),
             "picture": claims.get("picture"),
         }
+
+        # Check domain restrictions
+        if not is_email_domain_allowed(result["email"]):
+            return self.write_json({
+                "error": "domain_not_allowed", 
+                "detail": f"Email domain not in allowed list. Contact administrator for access."
+            }, 403)
 
         # Persist a session for ~30 days
         self.set_secure_cookie(
