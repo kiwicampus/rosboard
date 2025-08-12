@@ -288,8 +288,9 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
     dropped_users = {}  # Track recently dropped users with timestamps for Foxglove association
 
     # Time window (secs) for dropped user association with Foxglove since we don't have a way 
-    # to detect the user from the Foxglove connection
-    dropped_association_timeout: int = 5
+    # to detect the user from the Foxglove connection. Sometimes the reconnection can take some time
+    # depending on the network connection.
+    dropped_association_timeout: int = 10
     
     @classmethod
     def load_persistent_sessions(cls):
