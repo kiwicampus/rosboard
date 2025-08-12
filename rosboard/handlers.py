@@ -73,7 +73,7 @@ class AuthStartHandler(tornado.web.RequestHandler):
             "device_code": data["device_code"],
             "user_code": data["user_code"],
             "verification_url": data["verification_url"],
-            "interval": data.get("interval", 5),
+            "interval": data.get("interval", 2.5),
             "expires_in": data.get("expires_in", 600)
         })
 
