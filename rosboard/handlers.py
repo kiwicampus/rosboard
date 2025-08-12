@@ -189,6 +189,38 @@ class LogoutHandler(tornado.web.RequestHandler):
         self.set_header("Content-Type", "application/json")
         self.finish(json.dumps({"ok": True}))
 
+class AdminHandler(tornado.web.RequestHandler):
+    """Admin endpoint to monitor WebSocket connections"""
+    
+    def get(self):
+        # Get connection statistics
+        stats = ROSBoardSocketHandler.get_connection_stats()
+        
+        # Add additional system info
+        stats['system'] = {
+            'hostname': socket.gethostname(),
+            'version': __version__,
+            'uptime': time.time() - getattr(self, '_start_time', time.time())
+        }
+        
+        self.set_header("Content-Type", "application/json")
+        self.finish(json.dumps(stats, indent=2))
+
+class AdminPageHandler(tornado.web.RequestHandler):
+    """Handler for the admin page"""
+    
+    def get(self):
+        self.set_header("Content-Type", "text/html")
+        static_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'html')
+        admin_file = os.path.join(static_path, 'admin.html')
+        
+        try:
+            with open(admin_file, "r", encoding="utf-8") as f:
+                self.write(f.read())
+        except FileNotFoundError:
+            self.set_status(404)
+            self.write("Admin page not found")
+
 class LoginPageHandler(tornado.web.RequestHandler):
     """Handler for the login page"""
     
@@ -240,7 +272,8 @@ class MainPageHandler(AuthenticatedHandler):
 
 
 class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
-    sockets = set()
+    sockets = set()  # All sockets
+    users = {}       # Track users by email -> list of their sockets
 
     def check_origin(self, origin):
         # Allow connections from any origin so we can connect from other pages
@@ -290,7 +323,17 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         self.update_intervals_by_topic = {}  # this socket's throttle rate on each topic
         self.last_data_times_by_topic = {}   # last time this socket received data on each topic
 
+        # Add to global tracking
         ROSBoardSocketHandler.sockets.add(self)
+        
+        # Track user-specific connections
+        user_email = self.user.get('email', 'anonymous')
+        if user_email not in ROSBoardSocketHandler.users:
+            ROSBoardSocketHandler.users[user_email] = []
+        ROSBoardSocketHandler.users[user_email].append(self)
+        
+        # Log connection (you can replace this with rospy.loginfo if needed)
+        print(f"User {user_email} connected. Total connections: {len(ROSBoardSocketHandler.sockets)}")
 
         self.write_message(json.dumps([ROSBoardSocketHandler.MSG_SYSTEM, {
             "hostname": socket.gethostname(),
@@ -299,13 +342,51 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         }], separators=(',', ':')))
 
     def on_close(self):
+        # Remove from global tracking
         ROSBoardSocketHandler.sockets.remove(self)
+        
+        # Remove from user-specific tracking
+        user_email = self.user.get('email', 'anonymous')
+        if user_email in ROSBoardSocketHandler.users:
+            ROSBoardSocketHandler.users[user_email].remove(self)
+            if not ROSBoardSocketHandler.users[user_email]:  # No more connections for this user
+                del ROSBoardSocketHandler.users[user_email]
+        
+        # Log disconnection
+        print(f"User {user_email} disconnected. Total connections: {len(ROSBoardSocketHandler.sockets)}")
 
         # when socket closes, remove ourselves from all subscriptions
         for topic_name in self.node.remote_subs:
             if self.id in self.node.remote_subs[topic_name]:
                 self.node.remote_subs[topic_name].remove(self.id)
 
+    @classmethod
+    def get_connected_users(cls):
+        """Get list of all connected users"""
+        return list(cls.users.keys())
+    
+    @classmethod
+    def get_user_connections(cls, user_email):
+        """Get all connections for a specific user"""
+        return cls.users.get(user_email, [])
+    
+    @classmethod
+    def get_connection_stats(cls):
+        """Get connection statistics"""
+        total_connections = len(cls.sockets)
+        unique_users = len(cls.users)
+        
+        user_connection_counts = {}
+        for user_email, connections in cls.users.items():
+            user_connection_counts[user_email] = len(connections)
+        
+        return {
+            'total_connections': total_connections,
+            'unique_users': unique_users,
+            'users': user_connection_counts,
+            'timestamp': time.time()
+        }
+    
     @classmethod
     def send_pings(cls):
         """

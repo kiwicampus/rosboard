@@ -15,7 +15,7 @@ from rosboard.ros_init import rospy
 from rclpy_message_converter.message_converter import convert_dictionary_to_ros_message
 from rosgraph_msgs.msg import Log
 
-from rosboard.handlers import MainPageHandler, ROSBoardSocketHandler, AuthStartHandler, AuthPollHandler, MeHandler, LogoutHandler, LoginPageHandler
+from rosboard.handlers import MainPageHandler, ROSBoardSocketHandler, AuthStartHandler, AuthPollHandler, MeHandler, LogoutHandler, LoginPageHandler, AdminHandler, AdminPageHandler
 from rosboard.serialization import ros2dict
 from rosboard.subscribers.dmesg_subscriber import DMesgSubscriber
 from rosboard.subscribers.dummy_subscriber import DummySubscriber
@@ -87,6 +87,8 @@ class ROSBoardNode(object):
                     "foxglove_layout_uri": self.foxglove_layout_uri
                 }),
                 (r"/login.html", LoginPageHandler),
+                (r"/admin.html", AdminPageHandler),
+                (r"/admin", AdminHandler),
                 (r"/auth/start", AuthStartHandler),
                 (r"/auth/poll", AuthPollHandler),
                 (r"/me", MeHandler),

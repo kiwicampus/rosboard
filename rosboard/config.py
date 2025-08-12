@@ -25,9 +25,9 @@ def validate_config():
         print("WARNING: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET environment variable not set")
         print("Authentication will be disabled - ROSboard will run without security")
         auth_enabled = False
-    
-    if COOKIE_SECRET == "rosboard_default_secret_change_in_production":
-        print("WARNING: Using default COOKIE_SECRET. Set COOKIE_SECRET environment variable for production")
+    else:
+        if COOKIE_SECRET == "rosboard_default_secret_change_in_production":
+            print("WARNING: Using default COOKIE_SECRET. Set COOKIE_SECRET environment variable for production")
     
     if auth_enabled:
         print("INFO: Google OAuth authentication is enabled")

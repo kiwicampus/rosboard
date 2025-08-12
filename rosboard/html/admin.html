@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>ROSboard Admin</title>
+  <link href="css/material-icons.css" media="all" rel="stylesheet" type="text/css">
+  <link rel="stylesheet" href="css/material.indigo-blue.min.css" />
+  <link href="css/index.css" media="all" rel="stylesheet" type="text/css">
+  <style>
+    body { 
+      font-family: 'Titillium Web', sans-serif; 
+      background: #202020; 
+      color: #f0f0f0; 
+      margin: 0; 
+      padding: 2em; 
+    }
+    
+    .admin-container { 
+      max-width: 1200px; 
+      margin: 0 auto; 
+    }
+    
+    .admin-card { 
+      background: #303030; 
+      padding: 2rem; 
+      border-radius: 5pt; 
+      box-shadow: 3pt 3pt 3pt rgba(0,0,0,0.2); 
+      margin-bottom: 2rem; 
+      overflow: hidden; 
+    }
+    
+    .admin-card h2 { 
+      margin-top: 0; 
+      color: #e3f2fd; 
+      font-family: 'Titillium Web', sans-serif;
+      font-size: 18pt;
+      padding-top: 10pt;
+      padding-left: 15pt;
+      padding-bottom: 10pt;
+      border-bottom: 2px solid #3f51b5;
+    }
+    
+    .stats-grid { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+      gap: 1rem; 
+      margin: 1rem 0; 
+    }
+    
+    .stat-box { 
+      background: #3f51b5; 
+      padding: 1rem; 
+      border-radius: 5pt; 
+      text-align: center; 
+      border: 1px solid #5c6bc0;
+      box-shadow: 3pt 3pt 3pt rgba(63, 81, 181, 0.3);
+    }
+    
+    .stat-number { 
+      font-size: 2rem; 
+      font-weight: bold; 
+      color: #ffffff; 
+      font-family: 'Titillium Web', sans-serif;
+    }
+    
+    .stat-label { 
+      color: #e8eaf6; 
+      margin-top: 0.5rem; 
+      font-weight: 500; 
+      font-family: 'Titillium Web', sans-serif;
+    }
+    
+    .user-list { 
+      margin: 1rem 0; 
+    }
+    
+    .user-item { 
+      background: #404040; 
+      padding: 1rem; 
+      margin: 0.5rem 0; 
+      border-radius: 5pt; 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      border: 1px solid #3f51b5;
+      box-shadow: 3pt 3pt 3pt rgba(0,0,0,0.2);
+    }
+    
+    .user-item:hover { 
+      background: #505050; 
+      border-color: #5c6bc0;
+      box-shadow: 3pt 3pt 3pt rgba(63, 81, 181, 0.2);
+    }
+    
+    .user-email { 
+      font-weight: bold; 
+      color: #c0c0c0; 
+      font-family: 'Titillium Web', sans-serif;
+    }
+    
+    .connection-count { 
+      background: #3f51b5; 
+      color: white; 
+      padding: 0.25rem 0.5rem; 
+      border-radius: 12px; 
+      font-size: 0.8rem; 
+      font-weight: bold;
+    }
+    
+    .refresh-button { 
+      background: #3f51b5; 
+      color: white; 
+      border: none; 
+      padding: 0.5rem 1rem; 
+      border-radius: 4px; 
+      cursor: pointer; 
+      margin-bottom: 1rem; 
+      font-weight: bold; 
+      font-family: 'Titillium Web', sans-serif;
+      font-size: 12pt;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+      transition: all 0.3s ease;
+    }
+    
+    .refresh-button:hover { 
+      background: #5c6bc0; 
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+    }
+    
+    .auto-refresh { 
+      margin: 1rem 0; 
+    }
+    
+    .auto-refresh label { 
+      color: #c0c0c0; 
+      font-weight: 500; 
+      font-family: 'Titillium Web', sans-serif;
+    }
+    
+    .auto-refresh input[type="checkbox"] { 
+      accent-color: #3f51b5; 
+    }
+    
+    /* Loading state styling */
+    .loading-text { 
+      color: #3f51b5; 
+      font-style: italic; 
+      font-family: 'Titillium Web', sans-serif;
+    }
+    
+    /* No users message styling */
+    .no-users-text { 
+      color: #c0c0c0; 
+      font-style: italic; 
+      font-family: 'Titillium Web', sans-serif;
+    }
+    
+    /* Error state styling */
+    .error-text { 
+      color: #f44336; 
+    }
+    
+    /* Success state styling */
+    .success-text { 
+      color: #4caf50; 
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <div class="admin-card">
+      <h2>ROSboard Connection Monitor</h2>
+      <button class="refresh-button" onclick="refreshStats()">🔄 Refresh Stats</button>
+      <div class="auto-refresh">
+        <label><input type="checkbox" id="auto-refresh" onchange="toggleAutoRefresh()"> Auto-refresh every 5 seconds</label>
+      </div>
+    </div>
+
+    <div class="admin-card">
+      <h2>Connection Statistics</h2>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-number" id="total-connections">-</div>
+          <div class="stat-label">Total Connections</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number" id="unique-users">-</div>
+          <div class="stat-label">Unique Users</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number" id="uptime">-</div>
+          <div class="stat-label">Uptime (s)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="admin-card">
+      <h2>Connected Users</h2>
+      <div id="user-list" class="user-list">
+        <p class="loading-text">Loading users...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let autoRefreshInterval = null;
+
+    async function refreshStats() {
+      try {
+        const response = await fetch('/admin');
+        const data = await response.json();
+        
+        // Update statistics
+        document.getElementById('total-connections').textContent = data.total_connections;
+        document.getElementById('unique-users').textContent = data.unique_users;
+        document.getElementById('uptime').textContent = Math.floor(data.system?.uptime || 0);
+        
+        // Update user list
+        const userList = document.getElementById('user-list');
+        if (data.users && Object.keys(data.users).length > 0) {
+          userList.innerHTML = '';
+          Object.entries(data.users).forEach(([email, count]) => {
+            const userItem = document.createElement('div');
+            userItem.className = 'user-item';
+            userItem.innerHTML = `
+              <span class="user-email">${email}</span>
+              <span class="connection-count">${count} connection${count > 1 ? 's' : ''}</span>
+            `;
+            userList.appendChild(userItem);
+          });
+        } else {
+          userList.innerHTML = '<p class="no-users-text">No users connected</p>';
+        }
+        
+      } catch (error) {
+        console.error('Error refreshing stats:', error);
+      }
+    }
+
+    function toggleAutoRefresh() {
+      const checkbox = document.getElementById('auto-refresh');
+      if (checkbox.checked) {
+        autoRefreshInterval = setInterval(refreshStats, 5000);
+      } else {
+        if (autoRefreshInterval) {
+          clearInterval(autoRefreshInterval);
+          autoRefreshInterval = null;
+        }
+      }
+    }
+
+    // Initial load
+    refreshStats();
+  </script>
+</body>
+</html> 
