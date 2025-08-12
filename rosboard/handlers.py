@@ -6,6 +6,11 @@ import types
 import uuid
 import os
 import asyncio
+import pickle
+from pathlib import Path
+
+import threading
+import time
 
 import tornado
 import tornado.web
@@ -14,7 +19,10 @@ import tornado.websocket
 # This brakes ROS1 support
 from rosboard.topics import get_all_topics, update_all_topics_with_typedef
 from rosboard.ros_init import rospy
+
+# Config stuff for auth
 from rosboard.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, DEVICE_CODE_URL, TOKEN_URL
+from rosboard.config import PERSISTENT_SESSION_FILE, PERSISTENT_SESSION_TIMEOUT
 
 from . import __version__
 
@@ -274,15 +282,134 @@ class MainPageHandler(AuthenticatedHandler):
 class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
     sockets = set()  # All sockets
     users = {}       # Track users by email -> list of their sockets
+    dropped_users = {}  # Track recently dropped users with timestamps for Foxglove association
+
+    # Time window (secs) for dropped user association with Foxglove since we don't have a way 
+    # to detect the user from the Foxglove connection
+    dropped_association_timeout: int = 5
+    
+    @classmethod
+    def load_persistent_sessions(cls):
+        """Load persistent Foxglove sessions from file"""
+        try:
+            if os.path.exists(PERSISTENT_SESSION_FILE):
+                with open(PERSISTENT_SESSION_FILE, 'rb') as f:
+                    sessions = pickle.load(f)
+                    return sessions
+        except Exception as e:
+            print(f"Failed to load persistent sessions: {e}")
+        return {}
+    
+    @classmethod
+    def save_persistent_sessions(cls):
+        """Save current Foxglove sessions to file"""
+        try:
+            # Get current Foxglove connections with timestamps
+            foxglove_sessions = {}
+            current_time = time.time()
+            
+            for email, connections in cls.users.items():
+                foxglove_connections = []
+                for conn in connections:
+                    if getattr(conn, 'client_type', '') == 'foxglove':
+                        foxglove_connections.append(conn)
+                
+                # If user has Foxglove connections, save the connection info
+                if foxglove_connections:
+                    # Store the current time as the session timestamp
+                    # This represents when the session was last active
+                    foxglove_sessions[email] = current_time
+            
+            # Save to file
+            with open(PERSISTENT_SESSION_FILE, 'wb') as f:
+                pickle.dump(foxglove_sessions, f)
+        except Exception as e:
+            print(f"Failed to save persistent sessions: {e}")
+    
+    @classmethod
+    def force_save_persistent_sessions(cls):
+        """Force save persistent sessions immediately (useful for debugging)"""
+        cls.save_persistent_sessions()
+    
+    @classmethod
+    def cleanup_expired_sessions(cls):
+        """Remove expired sessions (older than configured timeout) from persistent storage"""
+        try:
+            sessions = cls.load_persistent_sessions()
+            
+            current_time = time.time()
+            expired_sessions = []
+            
+            for email, timestamp in sessions.items():
+                if current_time - timestamp > PERSISTENT_SESSION_TIMEOUT:
+                    expired_sessions.append(email)
+            
+            for email in expired_sessions:
+                del sessions[email]
+            
+            # Save cleaned up sessions
+            with open(PERSISTENT_SESSION_FILE, 'wb') as f:
+                pickle.dump(sessions, f)
+            
+            if expired_sessions:
+                print(f"Cleaned up {len(expired_sessions)} expired sessions (timeout: {PERSISTENT_SESSION_TIMEOUT}s)")
+        except Exception as e:
+            print(f"Failed to cleanup expired sessions: {e}")
+    
+    @classmethod
+    def find_persistent_foxglove_user(cls):
+        """Find a persistent Foxglove user based on recent activity"""
+        cls.cleanup_expired_sessions()
+        
+        try:
+            sessions = cls.load_persistent_sessions()
+            # Find the most recent session
+            if sessions:
+                most_recent_email = max(sessions.keys(), key=lambda email: sessions[email])
+                most_recent_time = sessions[email]
+                
+                # Check if it's within configured timeout
+                if time.time() - most_recent_time <= PERSISTENT_SESSION_TIMEOUT:
+                    return most_recent_email
+        except Exception as e:
+            print(f"Failed to find persistent Foxglove user: {e}")
+        
+        return None
+    
+    @classmethod
+    def initialize_persistent_sessions(cls):
+        """Initialize persistent sessions on startup"""
+        cls.load_persistent_sessions()
+        cls.cleanup_expired_sessions()
+        
+        # Start periodic session saving (every 30 seconds)
+        cls.start_periodic_session_saving()
+    
+    @classmethod
+    def start_periodic_session_saving(cls):
+        """Start periodic saving of persistent sessions to handle runtime crashes"""
+        def periodic_save():
+            while True:
+                try:
+                    time.sleep(15)  # Save every 15 seconds
+                    if cls.sockets:  # Only save if there are active connections
+                        cls.save_persistent_sessions()
+                except Exception as e:
+                    print(f"Periodic session save failed: {e}")
+        
+        # Start periodic saving in background thread
+        save_thread = threading.Thread(target=periodic_save, daemon=True)
+        save_thread.start()
 
     def check_origin(self, origin):
         # Allow connections from any origin so we can connect from other pages
         return True
 
-    def initialize(self, node, max_allowed_latency, full_topics):
+    def initialize(self, node, max_allowed_latency, full_topics, allow_external_clients):
         # store the instance of the ROS node that created this WebSocketHandler so we can access it later
         self.node = node
         self.max_allowed_latency = max_allowed_latency
+        self.allow_external_clients = allow_external_clients
 
         # Cache the topics and their typedefs since this can be slow
         # This is a dict by reference, so it will be updated by the rosboard node
@@ -292,20 +419,71 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         # Non-None enables compression with default options.
         return {}
 
-    def open(self):
-        # Check authentication before allowing WebSocket connection (if enabled)
-        from rosboard.config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
-        
+    def handle_auth(self):
         if GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET:
+            # First, try to get user from cookie (regardless of connection source)
             user = current_user_from_cookie(self)
-            if not user:
-                self.close(1008, "Authentication required")
-                return
-            self.user = user
+            if user:
+                # User is authenticated via cookie - use their real identity
+                self.user = user
+                self.auth_method = "cookie"
+                # Determine if this is coming from Foxglove or main interface
+                if self._is_foxglove_connection():
+                    self.client_type = "foxglove"
+                else:
+                    self.client_type = "rosboard"
+            else:
+                # No valid session - check if external clients are allowed
+                if self.allow_external_clients:
+                    # Check if this might be a Foxglove connection from a recently dropped user
+                    if self._is_foxglove_connection():
+                        recently_dropped_user = ROSBoardSocketHandler.find_recently_dropped_user()
+                        if recently_dropped_user:
+                            # Associate this connection with the recently dropped user
+                            self.user = {"email": recently_dropped_user, "sub": "from_dropped"}
+                            self.auth_method = "dropped_association"
+                            self.client_type = "foxglove"
+                        else:
+                            # Check for persistent Foxglove sessions (for restarts)
+                            persistent_user = ROSBoardSocketHandler.find_persistent_foxglove_user()
+                            if persistent_user:
+                                # Associate with persistent user from file
+                                self.user = {"email": persistent_user, "sub": "from_persistent"}
+                                self.auth_method = "persistent_association"
+                                self.client_type = "foxglove"
+                            else:
+                                # No persistent user, treat as external client
+                                self.user = {"email": "external_client", "sub": "external"}
+                                self.auth_method = "external"
+                                self.client_type = "foxglove"
+                    else:
+                        # Not Foxglove, treat as regular external client
+                        self.user = {"email": "external_client", "sub": "external"}
+                        self.auth_method = "external"
+                        self.client_type = "external"
+                    
+                    print(f"External client connected from {self.request.remote_ip} - allowing anonymous access")
+                else:
+                    # External clients not allowed, close connection
+                    self.close(1008, "Authentication required")
+                    return False
         else:
             # Authentication disabled
             self.user = {"email": "anonymous", "sub": "anonymous"}
-            
+            self.auth_method = "no-auth"
+            self.client_type = "foxglove" if self._is_foxglove_connection() else "rosboard"
+        
+        return True
+
+    def open(self):
+        # Initialize persistent sessions on first connection (before processing anything)
+        if len(ROSBoardSocketHandler.sockets) == 0:
+            ROSBoardSocketHandler.initialize_persistent_sessions()
+                
+        if not self.handle_auth():
+            return
+
+        # Initialize WebSocket connection
         self.id = uuid.uuid4()    # unique socket id
         self.latency = 0          # latency measurement
         self.last_ping_times = [0] * 1024
@@ -332,14 +510,37 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
             ROSBoardSocketHandler.users[user_email] = []
         ROSBoardSocketHandler.users[user_email].append(self)
         
-        # Log connection (you can replace this with rospy.loginfo if needed)
-        print(f"User {user_email} connected. Total connections: {len(ROSBoardSocketHandler.sockets)}")
+        # Log connection with enhanced information
+        print(f"User {user_email} connected (via {self.auth_method} from {self.client_type}). Total connections: {len(ROSBoardSocketHandler.sockets)}")
+
+        # Save persistent sessions if this is a Foxglove connection (capture current state)
+        if getattr(self, 'client_type', '') == 'foxglove' and user_email != 'external_client':
+            ROSBoardSocketHandler.save_persistent_sessions()
 
         self.write_message(json.dumps([ROSBoardSocketHandler.MSG_SYSTEM, {
             "hostname": socket.gethostname(),
             "version": __version__,
             "user": self.user.get("email", "unknown")
         }], separators=(',', ':')))
+
+    def _is_foxglove_connection(self):
+        """Detect if this WebSocket connection is coming from Foxglove"""
+        # Since the user is redirecting within the same browser session,
+        # we only need to check for obvious Foxglove identifiers
+        
+        # Check User-Agent for Foxglove identifiers
+        user_agent = self.request.headers.get("User-Agent", "").lower()
+        if "foxglove" in user_agent:
+            return True
+            
+        # Check Origin header for Foxglove domains
+        origin = self.request.headers.get("Origin", "")
+        if origin and "foxglove" in origin.lower():
+            return True
+            
+        # For redirects within the same session, we'll be more conservative
+        # Only classify as Foxglove if we're very sure
+        return False
 
     def on_close(self):
         # Remove from global tracking
@@ -352,8 +553,16 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
             if not ROSBoardSocketHandler.users[user_email]:  # No more connections for this user
                 del ROSBoardSocketHandler.users[user_email]
         
+        # Track this user as recently dropped for potential Foxglove association
+        if user_email != 'anonymous' and user_email != 'external_client':
+            ROSBoardSocketHandler.dropped_users[user_email] = time.time()
+        
+        # Save persistent sessions if this was a Foxglove connection
+        if getattr(self, 'client_type', '') == 'foxglove' and user_email != 'external_client':
+            ROSBoardSocketHandler.save_persistent_sessions()
+        
         # Log disconnection
-        print(f"User {user_email} disconnected. Total connections: {len(ROSBoardSocketHandler.sockets)}")
+        print(f"User {user_email} disconnected (via {getattr(self, 'auth_method', 'unknown')} from {getattr(self, 'client_type', 'unknown')}). Total connections: {len(ROSBoardSocketHandler.sockets)}")
 
         # when socket closes, remove ourselves from all subscriptions
         for topic_name in self.node.remote_subs:
@@ -377,16 +586,60 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         unique_users = len(cls.users)
         
         user_connection_counts = {}
+        user_client_details = {}
+        
         for user_email, connections in cls.users.items():
             user_connection_counts[user_email] = len(connections)
+            
+            # Get client type breakdown for this user
+            client_types = {}
+            for conn in connections:
+                client_type = getattr(conn, 'client_type', 'unknown')
+                client_types[client_type] = client_types.get(client_type, 0) + 1
+            
+            user_client_details[user_email] = {
+                'total_connections': len(connections),
+                'client_breakdown': client_types
+            }
         
         return {
             'total_connections': total_connections,
             'unique_users': unique_users,
             'users': user_connection_counts,
+            'user_details': user_client_details,
             'timestamp': time.time()
         }
     
+    @classmethod
+    def cleanup_dropped_users(cls):
+        """Clean up old dropped user entries (older than 5 seconds)"""
+        current_time = time.time()
+        expired_users = []
+        
+        for email, drop_time in cls.dropped_users.items():
+            if current_time - drop_time > cls.dropped_association_timeout:
+                expired_users.append(email)
+        
+        for email in expired_users:
+            del cls.dropped_users[email]
+    
+    @classmethod
+    def find_recently_dropped_user(cls):
+        """Find a recently dropped user (within 5 seconds) and remove them from tracking"""
+        cls.cleanup_dropped_users()  # Clean up old entries first
+        
+        if cls.dropped_users:
+            # Return the most recently dropped user
+            most_recent_email = max(cls.dropped_users.keys(), 
+                                  key=lambda email: cls.dropped_users[email])
+            most_recent_time = cls.dropped_users[most_recent_email]
+            
+            # Remove from tracking and return
+            del cls.dropped_users[most_recent_email]
+            return most_recent_email
+        
+        return None
+
     @classmethod
     def send_pings(cls):
         """

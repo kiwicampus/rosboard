@@ -40,6 +40,7 @@ class ROSBoardNode(object):
         self.max_allowed_latency = rospy.get_param("~max_allowed_latency", 10000)
         self.foxglove_uri = rospy.get_param("~foxglove_uri", "https://app.foxglove.dev/")
         self.foxglove_layout_uri = rospy.get_param("~foxglove_layout_uri", "")
+        self.allow_external_clients = rospy.get_param("~allow_external_clients", True)
         # desired subscriptions of all the websockets connecting to this instance.
         # these remote subs are updated directly by "friend" class ROSBoardSocketHandler.
         # this class will read them and create actual ROS subscribers accordingly.
@@ -79,7 +80,8 @@ class ROSBoardNode(object):
                 (r"/rosboard/v1", ROSBoardSocketHandler, {
                     "node": self,
                     "max_allowed_latency": self.max_allowed_latency,
-                    "full_topics": self.shared_full_topics
+                    "full_topics": self.shared_full_topics,
+                    "allow_external_clients": self.allow_external_clients
                 }),
                 (r"/", MainPageHandler, {
                     "default_filename": "index.html",

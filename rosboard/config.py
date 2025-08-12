@@ -12,6 +12,12 @@ GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 # Cookie Configuration
 COOKIE_SECRET = os.environ.get("COOKIE_SECRET", "rosboard_default_secret_change_in_production")
 
+# Persistent Session Configuration
+# This is used to store the session data for the Foxglove connection in case rosboard dies
+# So we can associate the Foxglove connection with the last user that was connected
+PERSISTENT_SESSION_FILE = os.environ.get("PERSISTENT_SESSION_FILE", "rosboard_foxglove_sessions.pkl")
+PERSISTENT_SESSION_TIMEOUT = int(os.environ.get("PERSISTENT_SESSION_TIMEOUT", "60"))  # seconds
+
 # Authentication URLs
 DEVICE_CODE_URL = "https://oauth2.googleapis.com/device/code"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
