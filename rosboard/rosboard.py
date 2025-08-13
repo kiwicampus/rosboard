@@ -15,12 +15,14 @@ from rosboard.ros_init import rospy
 from rclpy_message_converter.message_converter import convert_dictionary_to_ros_message
 from rosgraph_msgs.msg import Log
 
-from rosboard.handlers import MainPageHandler, ROSBoardSocketHandler
+from rosboard.handlers import MainPageHandler, ROSBoardSocketHandler, AuthStartHandler, AuthPollHandler, MeHandler, LogoutHandler, LoginPageHandler, AdminHandler, AdminPageHandler
 from rosboard.serialization import ros2dict
 from rosboard.subscribers.dmesg_subscriber import DMesgSubscriber
 from rosboard.subscribers.dummy_subscriber import DummySubscriber
 from rosboard.subscribers.processes_subscriber import ProcessesSubscriber
 from rosboard.subscribers.system_stats_subscriber import SystemStatsSubscriber
+from rosboard_msgs.msg import SessionMetrics
+
 
 # This brakes ROS1 support
 from rosboard.topics import (
@@ -28,6 +30,9 @@ from rosboard.topics import (
     get_all_topics_with_typedef,
     update_all_topics_with_typedef,
 )
+
+from rosboard.config import COOKIE_SECRET, validate_config
+
 
 
 class ROSBoardNode(object):
@@ -40,6 +45,18 @@ class ROSBoardNode(object):
         self.max_allowed_latency = rospy.get_param("~max_allowed_latency", 10000)
         self.foxglove_uri = rospy.get_param("~foxglove_uri", "https://app.foxglove.dev/")
         self.foxglove_layout_uri = rospy.get_param("~foxglove_layout_uri", "")
+        self.allow_external_clients = rospy.get_param("~allow_external_clients", True)
+        self.google_auth_enabled = rospy.get_param("~google_auth_enabled", False)
+        
+        # Get parameters for session metrics and auto-shutdown
+        self.auto_shutdown_time = rospy.get_param("~auto_shutdown_after_seconds", 0)
+        self.metrics_enabled = rospy.get_param("~enable_session_metrics", True)
+        
+        # Create metrics publisher if enabled
+        self.metrics_publisher = None
+        if self.metrics_enabled:
+            self.metrics_publisher = rospy.Publisher('/rosboard/session_metrics', SessionMetrics, queue_size=10)
+        
         # desired subscriptions of all the websockets connecting to this instance.
         # these remote subs are updated directly by "friend" class ROSBoardSocketHandler.
         # this class will read them and create actual ROS subscribers accordingly.
@@ -70,33 +87,53 @@ class ROSBoardNode(object):
             self.sub_rosout = rospy.Subscriber("/rosout", Log, lambda x:x)
 
         static_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'html')
-        tornado_settings = {
-            'debug': True, 
-            'static_path':static_path,
-            'template_path':static_path
-        }
-
+        
         # Start by passing the topics and their typedefs for caching
         # TODO: add ros1 support for this
         self.shared_full_topics = get_all_topics_with_typedef()
-
+        
         tornado_handlers = [
                 (r"/rosboard/v1", ROSBoardSocketHandler, {
                     "node": self,
                     "max_allowed_latency": self.max_allowed_latency,
-                    "full_topics": self.shared_full_topics
+                    "full_topics": self.shared_full_topics,
+                    "allow_external_clients": self.allow_external_clients,
+                    "google_auth_enabled": self.google_auth_enabled,
+                    "metrics_publisher": self.metrics_publisher,
+                    "auto_shutdown_time": self.auto_shutdown_time
                 }),
                 (r"/", MainPageHandler, {
                     "default_filename": "index.html",
                     "foxglove_uri": self.foxglove_uri,
-                    "foxglove_layout_uri": self.foxglove_layout_uri
+                    "foxglove_layout_uri": self.foxglove_layout_uri,
+                    "google_auth_enabled": self.google_auth_enabled
                 }),
+                (r"/login.html", LoginPageHandler),
+                (r"/admin.html", AdminPageHandler),
+                (r"/admin", AdminHandler),
+                (r"/auth/start", AuthStartHandler),
+                (r"/auth/poll", AuthPollHandler),
+                (r"/me", MeHandler, {
+                    "google_auth_enabled": self.google_auth_enabled
+                }),
+                (r"/logout", LogoutHandler),
                 (r"/js/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(static_path, 'js')}),
                 (r"/css/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(static_path, 'css')}),
                 (r"/fonts/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(static_path, 'fonts')}),
         ]
 
         self.event_loop = None
+        
+        # Import and validate configuration
+        validate_config(self.google_auth_enabled, self.allow_external_clients)
+        
+        tornado_settings = {
+            'debug': True, 
+            'static_path':static_path,
+            'template_path':static_path,
+            'cookie_secret': COOKIE_SECRET
+        }
+        
         self.tornado_application = tornado.web.Application(tornado_handlers, **tornado_settings)
         asyncio.set_event_loop(asyncio.new_event_loop())
         self.event_loop = tornado.ioloop.IOLoop()

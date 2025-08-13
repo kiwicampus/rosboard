@@ -29,6 +29,18 @@ If you intend to use this with melodic or earlier, you also need `rospkg` to all
 sudo pip3 install rospkg      # required for melodic and earlier distros
 ```
 
+## Authentication
+
+ROSboard now includes Google OAuth device authentication to secure access to your ROS topics and system data. This is **optional** but recommended for production use.
+
+**Quick Setup:**
+1. Set environment variables: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `COOKIE_SECRET`
+2. Run ROSboard normally - authentication will be automatically enabled
+
+**For detailed setup instructions, see [AUTHENTICATION.md](AUTHENTICATION.md)**
+
+**Note:** If authentication credentials are not configured, ROSboard will run without authentication (normal behavior).
+
 ## Running it the easy way (without installing it into a workspace)
 
 ```
