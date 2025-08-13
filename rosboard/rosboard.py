@@ -21,6 +21,8 @@ from rosboard.subscribers.dmesg_subscriber import DMesgSubscriber
 from rosboard.subscribers.dummy_subscriber import DummySubscriber
 from rosboard.subscribers.processes_subscriber import ProcessesSubscriber
 from rosboard.subscribers.system_stats_subscriber import SystemStatsSubscriber
+from rosboard_msgs.msg import SessionMetrics
+
 
 # This brakes ROS1 support
 from rosboard.topics import (
@@ -45,6 +47,16 @@ class ROSBoardNode(object):
         self.foxglove_layout_uri = rospy.get_param("~foxglove_layout_uri", "")
         self.allow_external_clients = rospy.get_param("~allow_external_clients", True)
         self.google_auth_enabled = rospy.get_param("~google_auth_enabled", False)
+        
+        # Get parameters for session metrics and auto-shutdown
+        self.auto_shutdown_time = rospy.get_param("~auto_shutdown_after_seconds", 0)
+        self.metrics_enabled = rospy.get_param("~enable_session_metrics", True)
+        
+        # Create metrics publisher if enabled
+        self.metrics_publisher = None
+        if self.metrics_enabled:
+            self.metrics_publisher = rospy.Publisher('/rosboard/session_metrics', SessionMetrics, queue_size=10)
+        
         # desired subscriptions of all the websockets connecting to this instance.
         # these remote subs are updated directly by "friend" class ROSBoardSocketHandler.
         # this class will read them and create actual ROS subscribers accordingly.
@@ -86,7 +98,9 @@ class ROSBoardNode(object):
                     "max_allowed_latency": self.max_allowed_latency,
                     "full_topics": self.shared_full_topics,
                     "allow_external_clients": self.allow_external_clients,
-                    "google_auth_enabled": self.google_auth_enabled
+                    "google_auth_enabled": self.google_auth_enabled,
+                    "metrics_publisher": self.metrics_publisher,
+                    "auto_shutdown_time": self.auto_shutdown_time
                 }),
                 (r"/", MainPageHandler, {
                     "default_filename": "index.html",

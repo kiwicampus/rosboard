@@ -8,6 +8,7 @@
   <license>BSD</license>
 
   <depend>rclpy_message_converter</depend>
+  <exec_depend>rosboard_msgs</exec_depend>
 
   <buildtool_depend condition="$ROS_VERSION == 1">catkin</buildtool_depend>
   <export>
