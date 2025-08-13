@@ -374,47 +374,6 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         
         return True
 
-    def open(self):
-        if not self.handle_auth():
-            return
-
-        # Initialize WebSocket connection
-        self.id = uuid.uuid4()    # unique socket id
-        self.latency = 0          # latency measurement
-        self.last_ping_times = [0] * 1024
-        self.ping_seq = 0
-
-        self.set_nodelay(True)
-
-        # polyfill of is_closing() method for older versions of tornado
-        if not hasattr(self.ws_connection, "is_closing"):
-            self.ws_connection.is_closing = types.MethodType(
-                lambda self_: self_.stream.closed() or self_.client_terminated or self_.server_terminated,
-                self.ws_connection
-            )
-    
-        self.update_intervals_by_topic = {}  # this socket's throttle rate on each topic
-        self.last_data_times_by_topic = {}   # last time this socket received data on each topic
-    
-        
-        # Add to global tracking
-        ROSBoardSocketHandler.sockets.add(self)
-        
-        # Track user-specific connections
-        user_email = self.user.get('email', 'anonymous')
-        if user_email not in ROSBoardSocketHandler.users:
-            ROSBoardSocketHandler.users[user_email] = []
-        ROSBoardSocketHandler.users[user_email].append(self)
-        
-        # Log connection with enhanced information
-        print(f"User {user_email} connected via {self.auth_method} from {self.client_type}. Total connections: {len(ROSBoardSocketHandler.sockets)}")
-    
-        self.write_message(json.dumps([ROSBoardSocketHandler.MSG_SYSTEM, {
-            "hostname": socket.gethostname(),
-            "version": __version__,
-            "user": self.user.get("email", "unknown")
-        }], separators=(',', ':')))
-
     def _is_foxglove_connection(self):
         """Detect if this WebSocket connection is coming from Foxglove"""
         # Check User-Agent for Foxglove identifiers
@@ -473,6 +432,47 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         except Exception as e:
             print(f"Failed to extract user from token: {e}")
             return {"email": "unknown", "sub": "unknown"}
+
+    def open(self):
+        if not self.handle_auth():
+            return
+
+        # Initialize WebSocket connection
+        self.id = uuid.uuid4()    # unique socket id
+        self.latency = 0          # latency measurement
+        self.last_ping_times = [0] * 1024
+        self.ping_seq = 0
+
+        self.set_nodelay(True)
+
+        # polyfill of is_closing() method for older versions of tornado
+        if not hasattr(self.ws_connection, "is_closing"):
+            self.ws_connection.is_closing = types.MethodType(
+                lambda self_: self_.stream.closed() or self_.client_terminated or self_.server_terminated,
+                self.ws_connection
+            )
+    
+        self.update_intervals_by_topic = {}  # this socket's throttle rate on each topic
+        self.last_data_times_by_topic = {}   # last time this socket received data on each topic
+    
+        
+        # Add to global tracking
+        ROSBoardSocketHandler.sockets.add(self)
+        
+        # Track user-specific connections
+        user_email = self.user.get('email', 'anonymous')
+        if user_email not in ROSBoardSocketHandler.users:
+            ROSBoardSocketHandler.users[user_email] = []
+        ROSBoardSocketHandler.users[user_email].append(self)
+        
+        # Log connection with enhanced information
+        print(f"User {user_email} connected via {self.auth_method} from {self.client_type}. Total connections: {len(ROSBoardSocketHandler.sockets)}")
+    
+        self.write_message(json.dumps([ROSBoardSocketHandler.MSG_SYSTEM, {
+            "hostname": socket.gethostname(),
+            "version": __version__,
+            "user": self.user.get("email", "unknown")
+        }], separators=(',', ':')))
 
     def on_close(self):
         # Remove from global tracking

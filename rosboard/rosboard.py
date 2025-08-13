@@ -111,7 +111,7 @@ class ROSBoardNode(object):
         self.event_loop = None
         
         # Import and validate configuration
-        validate_config(self.google_auth_enabled)
+        validate_config(self.google_auth_enabled, self.allow_external_clients)
         
         tornado_settings = {
             'debug': True, 
