@@ -385,6 +385,11 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         origin = self.request.headers.get("Origin", "")
         if origin and "foxglove" in origin.lower():
             return True
+
+        # Check if the connection has a query parameter "token", in that case might be a Foxglove connection
+        # from other Foxglove URL (like a local Foxglove app)
+        if self._extract_token_from_query():
+            return True
             
         return False
 
