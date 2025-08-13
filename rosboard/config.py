@@ -5,6 +5,10 @@ Configuration file for ROSboard authentication
 
 import os
 
+# Authentication URLs
+DEVICE_CODE_URL = "https://oauth2.googleapis.com/device/code"
+TOKEN_URL = "https://oauth2.googleapis.com/token"
+
 # Google OAuth Configuration
 GOOGLE_CLIENT_ID = os.environ.get("ROSBOARD_GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("ROSBOARD_GOOGLE_CLIENT_SECRET")
@@ -17,11 +21,6 @@ ALLOWED_EMAIL_DOMAINS = os.environ.get("ROSBOARD_ALLOWED_EMAIL_DOMAINS", "").spl
 if ALLOWED_EMAIL_DOMAINS == [""]:  # Handle empty string case
     ALLOWED_EMAIL_DOMAINS = []
 
-# Persistent Session Configuration
-# This is used to store the session data for the Foxglove connection in case rosboard dies
-# So we can associate the Foxglove connection with the last user that was connected
-PERSISTENT_SESSION_FILE = os.environ.get("ROSBOARD_PERSISTENT_SESSION_FILE", "rosboard_foxglove_sessions.pkl")
-PERSISTENT_SESSION_TIMEOUT = int(os.environ.get("ROSBOARD_PERSISTENT_SESSION_TIMEOUT", "60"))  # seconds
 
 def is_email_domain_allowed(email):
     """Check if the email domain is in the allowed whitelist"""
@@ -34,17 +33,16 @@ def is_email_domain_allowed(email):
     domain = email.split("@")[1].lower()
     return domain in [d.strip().lower() for d in ALLOWED_EMAIL_DOMAINS]
 
-# Authentication URLs
-DEVICE_CODE_URL = "https://oauth2.googleapis.com/device/code"
-TOKEN_URL = "https://oauth2.googleapis.com/token"
-
-def validate_config():
+def validate_config(google_auth_enabled):
     """Validate that required configuration is present"""
     auth_enabled = True
     
-    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-        print("WARNING: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET environment variable not set")
-        print("Authentication will be disabled - ROSboard will run without security")
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET or not google_auth_enabled:
+        if not google_auth_enabled:
+            print("INFO: Google OAuth authentication is disabled")
+        else:
+            print("WARNING: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET environment variable not set")
+            print("Authentication will be disabled - ROSboard will run without security")
         auth_enabled = False
     else:
         if COOKIE_SECRET == "rosboard_default_secret_change_in_production":
@@ -54,7 +52,5 @@ def validate_config():
         print("INFO: Google OAuth authentication is enabled")
         if ALLOWED_EMAIL_DOMAINS:
             print(f"INFO: Domain restrictions enabled for: {', '.join(ALLOWED_EMAIL_DOMAINS)}")
-    else:
-        print("INFO: Running ROSboard without authentication")
     
     return auth_enabled 

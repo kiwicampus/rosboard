@@ -248,6 +248,13 @@
             clearInterval(pollTimer);
             document.getElementById('loading').style.display = 'none';
             
+            // Check if we have a Foxglove token
+            if (data.foxglove_token) {
+              // Store the token for Foxglove use
+              localStorage.setItem('foxglove_token', data.foxglove_token);
+              console.log('Foxglove token stored for future use');
+            }
+            
             // Success! Redirect to main page
             window.location.href = '/';
           } else if (resp.status === 202) {

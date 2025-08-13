@@ -44,6 +44,7 @@ class ROSBoardNode(object):
         self.foxglove_uri = rospy.get_param("~foxglove_uri", "https://app.foxglove.dev/")
         self.foxglove_layout_uri = rospy.get_param("~foxglove_layout_uri", "")
         self.allow_external_clients = rospy.get_param("~allow_external_clients", True)
+        self.google_auth_enabled = rospy.get_param("~google_auth_enabled", False)
         # desired subscriptions of all the websockets connecting to this instance.
         # these remote subs are updated directly by "friend" class ROSBoardSocketHandler.
         # this class will read them and create actual ROS subscribers accordingly.
@@ -84,19 +85,23 @@ class ROSBoardNode(object):
                     "node": self,
                     "max_allowed_latency": self.max_allowed_latency,
                     "full_topics": self.shared_full_topics,
-                    "allow_external_clients": self.allow_external_clients
+                    "allow_external_clients": self.allow_external_clients,
+                    "google_auth_enabled": self.google_auth_enabled
                 }),
                 (r"/", MainPageHandler, {
                     "default_filename": "index.html",
                     "foxglove_uri": self.foxglove_uri,
-                    "foxglove_layout_uri": self.foxglove_layout_uri
+                    "foxglove_layout_uri": self.foxglove_layout_uri,
+                    "google_auth_enabled": self.google_auth_enabled
                 }),
                 (r"/login.html", LoginPageHandler),
                 (r"/admin.html", AdminPageHandler),
                 (r"/admin", AdminHandler),
                 (r"/auth/start", AuthStartHandler),
                 (r"/auth/poll", AuthPollHandler),
-                (r"/me", MeHandler),
+                (r"/me", MeHandler, {
+                    "google_auth_enabled": self.google_auth_enabled
+                }),
                 (r"/logout", LogoutHandler),
                 (r"/js/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(static_path, 'js')}),
                 (r"/css/(.*)", tornado.web.StaticFileHandler, {"path": os.path.join(static_path, 'css')}),
@@ -106,7 +111,7 @@ class ROSBoardNode(object):
         self.event_loop = None
         
         # Import and validate configuration
-        validate_config()
+        validate_config(self.google_auth_enabled)
         
         tornado_settings = {
             'debug': True, 

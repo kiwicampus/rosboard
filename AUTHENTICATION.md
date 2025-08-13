@@ -159,42 +159,58 @@ The system now supports multiple authentication methods for robust user tracking
 
 ### The Problem
 
-When authentication is enabled, external clients like Foxglove (running on different domains) cannot connect to the ROSboard WebSocket because:
+Foxglove Studio runs on a different domain/origin than ROSboard, which means:
 
-1. **Cross-Origin Cookie Access**: Foxglove instances cannot access ROSboard's authentication cookies
-2. **WebSocket Authentication**: The WebSocket connection requires valid session cookies
-3. **Domain Mismatch**: Different domains prevent cookie sharing
+- **Cookies are not shared** between ROSboard and Foxglove
+- **Cross-origin restrictions** prevent session sharing
+- **User identity is lost** when connecting from Foxglove
 
-For this we enable the connection of external clients without authentication and associate the Foxglove connection with the last user that was connected (we asume it clicked on the Foxglove button which redirected to Foxglove).
+### The Solution: Token-Based Authentication
 
-## Persistent Session System
+ROSboard now uses **JWT tokens** for Foxglove authentication:
 
-### The Problem with Restarts
-
-When ROSboard restarts (due to crashes, updates, or system reboots), all in-memory user tracking is lost. This means:
-
-- **Foxglove connections** become `"external_client"` instead of showing the user's email
-- **User association** is lost until the user re-authenticates
-- **Admin monitoring** shows anonymous connections
-
-### The Solution: Multi-Layer Session Persistence
-
-ROSboard now includes a robust persistent session system that handles **both** planned restarts and **runtime crashes**:
-
-1. **Real-time Session Saving**: Sessions are saved when Foxglove connections open and close
-2. **Periodic Auto-Save**: Sessions are automatically saved every 15 seconds during runtime
-3. **Restart Recovery**: Sessions are restored from file on startup within configurable timeout
+1. **User authenticates on ROSboard** → gets session cookies + Foxglove token
+2. **Token is stored locally** in browser localStorage
+3. **Foxglove redirect includes token** in WebSocket URL query parameters
+4. **WebSocket connection validates token** and associates user identity
 
 ### How It Works
 
-#### **During Normal Operation:**
-1. **User authenticates on ROSboard** → gets session cookies
-2. **User connects to Foxglove** → WebSocket shows their email
-3. **Session automatically saved** → every 30 seconds + on connection events
-4. **User disconnects** → final session state saved
+#### **Authentication Flow:**
+1. **User signs in** via Google OAuth device flow
+2. **Server generates JWT token** with user info and 7-day expiration
+3. **Token returned to client** along with session cookie
+4. **Token stored in localStorage** for Foxglove use
 
-#### **During Runtime Crashes:**
-1. **ROSboard dies unexpectedly** → sessions preserved in file (last save within 30s)
-2. **Foxglove reconnects** → system checks persistent file
-3. **If within timeout** → connection associated with saved user email ✅
-4. **If timeout expired** → shows as `external_client` ❌
+#### **Foxglove Connection:**
+1. **User clicks "Connect with Foxglove"** button
+2. **Token retrieved from localStorage** and added to WebSocket URL
+3. **Foxglove opens WebSocket** with `ws://localhost:8888/rosboard/v1?token=abc123`
+4. **Server validates token** and associates connection with user
+5. **User identity preserved** across domains
+
+### Token Security Features
+
+- **JWT-based** - Cryptographically signed and verified
+- **7-day expiration** - Tokens automatically expire
+- **Same secret** - Uses `COOKIE_SECRET` for consistency
+- **User info included** - Email and user ID embedded in token
+- **Query parameter** - Passed via WebSocket URL (not cookies)
+
+### Expected Behavior
+
+- **Before Foxglove redirect**: `"user@email.com (via cookie from rosboard)"` ✅
+- **After Foxglove redirect**: `"user@email.com (via token from foxglove)"` ✅
+- **No more external_client** - Authenticated users stay authenticated
+
+### Configuration
+
+No additional configuration needed! The token system works automatically with:
+
+- **Existing Google OAuth** setup
+- **Same cookie secret** configuration
+- **Standard WebSocket** connections
+
+## Environment Variables
+
+Set these environment variables before running ROSboard:

@@ -79,7 +79,16 @@
       var host = window.location.host;
       var protocol = window.location.protocol;
       var secure = protocol === 'https:';
+      
+      // Get the stored Foxglove token
+      var foxglove_token = localStorage.getItem('foxglove_token');
+      
+      // Build WebSocket URL with token if available
       var websocket_url = 'ws' + (secure ? 's' : '') + '://' + host + '/rosboard/v1';
+      if (foxglove_token) {
+        websocket_url += '?token=' + encodeURIComponent(foxglove_token);
+      }
+      
       // Encode the path to make it a valid query URL string
       websocket_url = encodeURIComponent(websocket_url);
       var target_url = foxglove_uri + '?ds=rosboard-websocket&ds.url=' + websocket_url;
