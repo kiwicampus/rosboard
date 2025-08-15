@@ -316,7 +316,7 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         """Allow connections from any origin (needed for Foxglove)"""
         return True
 
-    def initialize(self, node, max_allowed_latency, full_topics, allow_external_clients, google_auth_enabled, metrics_publisher=None, auto_shutdown_time=0):
+    def initialize(self, node, max_allowed_latency, full_topics, allow_external_clients, google_auth_enabled, metrics_publisher=None, auto_shutdown_time=0, front_end_auto_reconnect=True):
         # store the instance of the ROS node that created this WebSocketHandler so we can access it later
         self.node = node
         self.max_allowed_latency = max_allowed_latency
@@ -328,7 +328,8 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         self.full_topics = full_topics
         self.metrics_publisher = metrics_publisher
         self.auto_shutdown_time = auto_shutdown_time
-        
+        self.front_end_auto_reconnect = front_end_auto_reconnect
+
     def write_message(self, message, binary=False):
         """Override write_message to track actual compressed bytes sent."""
         # Store original stream write method to intercept actual bytes written
@@ -521,7 +522,8 @@ class ROSBoardSocketHandler(tornado.websocket.WebSocketHandler):
         self.write_message(json.dumps([ROSBoardSocketHandler.MSG_SYSTEM, {
             "hostname": socket.gethostname(),
             "version": __version__,
-            "user": self.user.get("email", "unknown")
+            "user": self.user.get("email", "unknown"),
+            "auto_reconnect": self.front_end_auto_reconnect,
         }], separators=(',', ':')))
 
     def on_close(self):

@@ -59,8 +59,12 @@ setInterval(() => {
 
 setInterval(() => {
   if(currentTransport && !currentTransport.isConnected()) {
-    console.log("attempting to reconnect ...");
-    currentTransport.connect();
+    if(currentTransport.isAutoReconnectEnabled()) {
+      console.log("attempting to reconnect ...");
+      currentTransport.connect();
+    } else {
+      console.log("auto-reconnect disabled, not attempting to reconnect");
+    }
   }
 }, 5000);
 
