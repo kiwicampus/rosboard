@@ -7,6 +7,7 @@ class WebSocketV1Transport {
       this.onTopics = onTopics ? onTopics.bind(this) : null;
       this.onSystem = onSystem ? onSystem.bind(this) : null;
       this.ws = null;
+      this.autoReconnectEnabled = true; // Default to true for backward compatibility
     }
   
     connect() {
@@ -48,13 +49,23 @@ class WebSocketV1Transport {
         }
         else if(wsMsgType === WebSocketV1Transport.MSG_MSG && that.onMsg) that.onMsg(data[1]);
         else if(wsMsgType === WebSocketV1Transport.MSG_TOPICS && that.onTopics) that.onTopics(data[1]);
-        else if(wsMsgType === WebSocketV1Transport.MSG_SYSTEM && that.onSystem) that.onSystem(data[1]);
+        else if(wsMsgType === WebSocketV1Transport.MSG_SYSTEM && that.onSystem) {
+          // Store auto_reconnect setting from system message
+          if (data[1] && typeof data[1].auto_reconnect === 'boolean') {
+            that.autoReconnectEnabled = data[1].auto_reconnect;
+          }
+          that.onSystem(data[1]);
+        }
         else console.log("received unknown message: " + wsmsg.data);
       }
     }
   
     isConnected() {
       return (this.ws && this.ws.readyState === this.ws.OPEN);
+    }
+
+    isAutoReconnectEnabled() {
+      return this.autoReconnectEnabled;
     }
   
     subscribe({topicName, maxUpdateRate = 24.0}) {
