@@ -53,7 +53,6 @@ class WebSocketV1Transport {
           // Store auto_reconnect setting from system message
           if (data[1] && typeof data[1].auto_reconnect === 'boolean') {
             that.autoReconnectEnabled = data[1].auto_reconnect;
-            console.log("auto_reconnect: " + that.autoReconnectEnabled);
           }
           that.onSystem(data[1]);
         }
