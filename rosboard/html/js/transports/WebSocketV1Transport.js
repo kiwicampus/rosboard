@@ -47,7 +47,7 @@ class WebSocketV1Transport {
             [WebSocketV1Transport.PONG_TIME]: Date.now(),
           }]));
         }
-        else if(wsMsgType === WebSocketV1Transport.MSG_MSG && that.onRosMsg) that.onRosMsg(data[1]);
+        else if(wsMsgType === WebSocketV1Transport.MSG_MSG && that.onMsg) that.onMsg(data[1]);
         else if(wsMsgType === WebSocketV1Transport.MSG_TOPICS && that.onTopics) that.onTopics(data[1]);
         else if(wsMsgType === WebSocketV1Transport.MSG_SYSTEM && that.onSystem) {
           // Store auto_reconnect setting from system message

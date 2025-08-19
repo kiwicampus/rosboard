@@ -51,7 +51,7 @@ class ROSBoardNode(object):
         # Get parameters for session metrics and auto-shutdown
         self.auto_shutdown_time = rospy.get_param("~auto_shutdown_after_seconds", 0)
         self.metrics_enabled = rospy.get_param("~enable_session_metrics", True)
-        self.front_end_auto_reconnect = rospy.get_param("~front_end_auto_reconnect", True)
+        self.frontend_auto_reconnect = rospy.get_param("~frontend_auto_reconnect", True)
         
         # Create metrics publisher if enabled
         self.metrics_publisher = None
@@ -102,7 +102,7 @@ class ROSBoardNode(object):
                     "google_auth_enabled": self.google_auth_enabled,
                     "metrics_publisher": self.metrics_publisher,
                     "auto_shutdown_time": self.auto_shutdown_time,
-                    "front_end_auto_reconnect": self.front_end_auto_reconnect,
+                    "frontend_auto_reconnect": self.frontend_auto_reconnect,
                 }),
                 (r"/", MainPageHandler, {
                     "default_filename": "index.html",
