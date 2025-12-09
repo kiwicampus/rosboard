@@ -164,6 +164,7 @@ class ROSBoardNode(object):
         # TODO: check ROS1 support for this
         topic_name = "/tf_static"
         topic_type = "tf2_msgs/msg/TFMessage"
+        self.static_transforms = []
         self.tf_static_sub = rospy.Subscriber(
             topic_name,
             self.get_msg_class(topic_type),
@@ -171,7 +172,6 @@ class ROSBoardNode(object):
             callback_args = (topic_name, topic_type),
             qos = self.get_transient_local_qos()
         )
-        self.static_transforms = []
 
     def on_tf_static(self, msg, topic_info):
         self.static_transforms.extend(msg.transforms)
