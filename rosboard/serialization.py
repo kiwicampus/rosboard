@@ -28,7 +28,23 @@ def ros2dict(msg, resize_image:bool=True):
     else:
         raise ValueError("ros2dict: Does not appear to be a simple type or a ROS message: %s" % str(msg))
 
+    # GridMap: drop layers other than elevation/traversability_slope to save bandwidth
+    is_grid_map = msg.__module__ in ("grid_map_msgs.msg._grid_map", "grid_map_msgs.msg._GridMap")
+    grid_map_keep = {"elevation", "traversability_slope"}
+    grid_map_indices = None
+    if is_grid_map:
+        all_layers = list(getattr(msg, "layers", []))
+        grid_map_indices = [i for i, n in enumerate(all_layers) if n in grid_map_keep]
+
     for field in fields_and_field_types:
+
+        if is_grid_map and field in ("layers", "data"):
+            seq = getattr(msg, field)
+            output[field] = [ros2dict(seq[i]) for i in grid_map_indices if i < len(seq)]
+            continue
+        if is_grid_map and field == "basic_layers":
+            output[field] = [n for n in getattr(msg, field) if n in grid_map_keep]
+            continue
 
         # CompressedImage: compress to jpeg
         if (msg.__module__ == "sensor_msgs.msg._CompressedImage" or \
@@ -88,7 +104,10 @@ def ros2dict(msg, resize_image:bool=True):
 
         value = getattr(msg, field)
         if type(value) in (str, bool, int, float):
-            output[field] = value
+            if type(value) is float and not np.isfinite(value):
+                output[field] = None
+            else:
+                output[field] = value
 
         elif type(value) is bytes:
             output[field] = base64.b64encode(value).decode()
@@ -100,7 +119,12 @@ def ros2dict(msg, resize_image:bool=True):
             output[field] = [ros2dict(el) for el in value]
 
         elif type(value) in (np.ndarray, array.array):
-            output[field] = value.tolist()
+            arr = np.asarray(value)
+            if arr.dtype.kind == "f":
+                # Replace NaN/Inf with None so json.dumps emits `null` instead of
+                # the non-standard `NaN`/`Infinity` tokens that strict JSON.parse rejects
+                arr = np.where(np.isfinite(arr), arr, None)
+            output[field] = arr.tolist()
 
         else:
             output[field] = ros2dict(value)
