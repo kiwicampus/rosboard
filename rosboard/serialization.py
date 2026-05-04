@@ -1,5 +1,6 @@
 import array
 import base64
+import math
 
 import numpy as np
 
@@ -104,8 +105,8 @@ def ros2dict(msg, resize_image:bool=True):
 
         value = getattr(msg, field)
         if type(value) in (str, bool, int, float):
-            if type(value) is float and not np.isfinite(value):
-                output[field] = None
+            if type(value) is float and not math.isfinite(value):
+                output[field] = "NaN"
             else:
                 output[field] = value
 
@@ -120,11 +121,13 @@ def ros2dict(msg, resize_image:bool=True):
 
         elif type(value) in (np.ndarray, array.array):
             arr = np.asarray(value)
-            if arr.dtype.kind == "f":
-                # Replace NaN/Inf with None so json.dumps emits `null` instead of
-                # the non-standard `NaN`/`Infinity` tokens that strict JSON.parse rejects
-                arr = np.where(np.isfinite(arr), arr, None)
-            output[field] = arr.tolist()
+            if arr.dtype.kind == "f" and not np.isfinite(arr).all():
+                # JSON.parse rejects NaN/Infinity tokens; emit the string "NaN" so
+                # JS Float32Array(...) coerces it back to NaN via Number("NaN")
+                flat = arr.ravel().tolist()
+                output[field] = ["NaN" if not math.isfinite(x) else x for x in flat]
+            else:
+                output[field] = arr.tolist()
 
         else:
             output[field] = ros2dict(value)
