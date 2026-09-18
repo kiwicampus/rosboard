@@ -92,6 +92,13 @@ def ros2dict(msg, resize_image:bool=True):
             and field == "intensities":
             continue
 
+        # CompressedPointCloud2: pass the cloudini-compressed bytes through as-is;
+        # decoding happens client-side (WASM)
+        if (msg.__module__ == "point_cloud_interfaces.msg._compressed_point_cloud2") \
+            and field == "compressed_data":
+            output[field] = base64.b64encode(bytes(getattr(msg, field))).decode()
+            continue
+
         # PointCloud2: extract only necessary fields, reduce precision
         if (msg.__module__ == "sensor_msgs.msg._PointCloud2" or \
             msg.__module__ == "sensor_msgs.msg._point_cloud2"):

@@ -94,6 +94,14 @@ class PointCloud2Viewer extends Space3DViewer {
   decodeAndRenderUncompressed(msg) {
     // decode an uncompressed pointcloud.
     // expects "data" field to be base64 encoded raw bytes but otherwise follows ROS standards
+    this._renderFromRawBuffer(msg, this._base64decode(msg.data));
+  }
+
+  _renderFromRawBuffer(msg, data) {
+    // renders a pointcloud from a raw (already decoded) ArrayBuffer of point data,
+    // laid out according to msg.fields/point_step/width/height (standard PointCloud2 layout).
+    // Shared by decodeAndRenderUncompressed() (base64) and CompressedPointCloud2Viewer
+    // (cloudini-decoded via WASM).
 
     let fields = {};
     let actualRecordSize = 0;
@@ -110,8 +118,6 @@ class PointCloud2Viewer extends Space3DViewer {
     if(!("x" in fields) || !("y") in fields) {
       this.error("Cannot display PointCloud2 message: Must have at least 'x' and 'y' fields or I don't know how to display it.");
     }
-
-    let data = this._base64decode(msg.data);
 
     if(!(msg.point_step * msg.width * msg.height === data.byteLength)) {
       this.error("Invalid PointCloud2: failed assertion: point_step * width * height === data.length");
