@@ -51,7 +51,7 @@ class CompressedPointCloud2Viewer extends PointCloud2Viewer {
         return;
       }
 
-      const actualSize = wasmModule._DecodePointCloudBuffer(inputPtr, compressedData.byteLength, outputPtr);
+      const actualSize = wasmModule._cldn_DecodeCompressedData(inputPtr, compressedData.byteLength, outputPtr);
       if (actualSize === 0) {
         this.error("cloudini: decompression failed");
         return;
