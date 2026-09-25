@@ -235,6 +235,10 @@ class ROSBoardNode(object):
             topic_info = rospy._node.get_publishers_info_by_topic(topic_name=topic_name)
             if len(topic_info):
                 qos = topic_info[0].qos_profile
+                # Discovery reports history as UNKNOWN with depth 0, which create_subscription rejects
+                if qos.history not in (HistoryPolicy.KEEP_LAST, HistoryPolicy.KEEP_ALL) or qos.depth == 0:
+                    qos.history = HistoryPolicy.KEEP_LAST
+                    qos.depth = 10
                 if qos.depth == 1 and qos.durability == QoSDurabilityPolicy.TRANSIENT_LOCAL:
                     rospy.logwarn(f"Topic {topic_name} has transient_local QoS but depth=1, some messages might be lost "
                                   "with this depth. Setting the depth to 10 to be sure to fetch all past messages"
