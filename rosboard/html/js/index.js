@@ -18,6 +18,8 @@ importJsOnce("js/viewers/CustomPlotViewer.js");
 importJsOnce("js/viewers/CurrentPlotView.js");
 importJsOnce("js/viewers/RPMPlotView.js");
 importJsOnce("js/viewers/PointCloud2Viewer.js");
+importJsOnce("js/cloudini_wasm.js");
+importJsOnce("js/viewers/CompressedPointCloud2Viewer.js");
 
 // GenericViewer must be last
 importJsOnce("js/viewers/GenericViewer.js");
